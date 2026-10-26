@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { 
   Activity, Bell, LogOut, Menu, X, Home
 } from "lucide-react"
-import { useAuth, type UserRole } from "@/context/AuthContext"
+import { useAuth } from "@/context/AuthContext"
 import { ThemeToggle } from "@/components/ui/ThemeToggle"
 
 export interface NavItem {
@@ -38,7 +38,7 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const navigate = useNavigate()
-  const { user, logout, switchDemoRole } = useAuth()
+  const { user, logout } = useAuth()
 
   const displayName = user ? `${user.firstName} ${user.lastName}` : (userDisplayName || "User")
   const displaySubtitle = user ? `${user.role} • ${user.email}` : (userSubtitle || "MediSlot Account")
@@ -61,17 +61,6 @@ export function DashboardShell({
   const handleLogout = () => {
     logout()
     navigate("/login")
-  }
-
-  const handleRoleSwitch = async (targetRole: UserRole) => {
-    await switchDemoRole(targetRole)
-    const routes: Record<UserRole, string> = {
-      PATIENT: "/dashboard/patient",
-      DOCTOR: "/dashboard/doctor",
-      CLINIC_ADMIN: "/dashboard/clinic",
-      PLATFORM_ADMIN: "/dashboard/platform",
-    }
-    navigate(routes[targetRole])
   }
 
   return (
@@ -103,33 +92,12 @@ export function DashboardShell({
 
         {/* Top Right Actions */}
         <div className="flex items-center gap-3">
-          {/* Quick role switcher for demonstration and test verification */}
-          <div className="hidden lg:flex items-center gap-1 text-xs border border-slate-200 dark:border-slate-800 rounded-lg p-1 bg-slate-50 dark:bg-slate-800/50">
-            <span className="text-[10px] text-slate-400 uppercase font-bold px-1.5">Switch Session:</span>
-            <button
-              onClick={() => handleRoleSwitch("PATIENT")}
-              className={`px-2 py-0.5 rounded cursor-pointer ${user?.role === "PATIENT" ? "bg-white dark:bg-slate-700 shadow-xs font-semibold text-sky-600" : "text-slate-500"}`}
-            >
-              Patient
-            </button>
-            <button
-              onClick={() => handleRoleSwitch("DOCTOR")}
-              className={`px-2 py-0.5 rounded cursor-pointer ${user?.role === "DOCTOR" ? "bg-white dark:bg-slate-700 shadow-xs font-semibold text-teal-600" : "text-slate-500"}`}
-            >
-              Doctor
-            </button>
-            <button
-              onClick={() => handleRoleSwitch("CLINIC_ADMIN")}
-              className={`px-2 py-0.5 rounded cursor-pointer ${user?.role === "CLINIC_ADMIN" ? "bg-white dark:bg-slate-700 shadow-xs font-semibold text-emerald-600" : "text-slate-500"}`}
-            >
-              Clinic
-            </button>
-            <button
-              onClick={() => handleRoleSwitch("PLATFORM_ADMIN")}
-              className={`px-2 py-0.5 rounded cursor-pointer ${user?.role === "PLATFORM_ADMIN" ? "bg-white dark:bg-slate-700 shadow-xs font-semibold text-purple-600" : "text-slate-500"}`}
-            >
-              Platform
-            </button>
+          {/* Authenticated RBAC Session Status */}
+          <div className="hidden lg:flex items-center gap-2 text-xs border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 bg-slate-50 dark:bg-slate-800/50">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+              Role: <strong className="text-slate-900 dark:text-white">{user?.role || "GUEST"}</strong>
+            </span>
           </div>
 
           <ThemeToggle />

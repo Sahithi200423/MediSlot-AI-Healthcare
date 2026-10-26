@@ -132,7 +132,7 @@ export function InteractiveBookingModal({
               </h3>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Live transactional slot reservation engine
+              Interactive Scheduling Preview (Live transactional engine in Phase 4)
             </p>
           </div>
           <button

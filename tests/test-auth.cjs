@@ -28,6 +28,7 @@ async function runTests() {
 
   // Test 1: Register New Patient
   console.log('1. Testing New Patient Registration...');
+  const testEmail = `jane.test.${Date.now()}@example.com`;
   const regRes = await request({
     hostname: 'localhost',
     port: 5000,
@@ -35,7 +36,7 @@ async function runTests() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   }, {
-    email: 'jane.test@example.com',
+    email: testEmail,
     password: 'Password123',
     firstName: 'Jane',
     lastName: 'Tester',
@@ -53,7 +54,7 @@ async function runTests() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   }, {
-    email: 'jane.test@example.com',
+    email: testEmail,
     password: 'WrongPassword999',
   });
   console.log(`   Status: ${badLogin.status} | Message: ${badLogin.body?.error?.message}`);
@@ -68,7 +69,7 @@ async function runTests() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   }, {
-    email: 'jane.test@example.com',
+    email: testEmail,
     password: 'Password123',
   });
   console.log(`   Status: ${goodLogin.status} | Logged in as: ${goodLogin.body?.data?.user?.firstName} ${goodLogin.body?.data?.user?.lastName}`);

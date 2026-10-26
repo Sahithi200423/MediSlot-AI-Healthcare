@@ -1,11 +1,22 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Activity, Menu, X, ArrowRight, LayoutDashboard } from "lucide-react"
+import { Activity, Menu, X, ArrowRight, LayoutDashboard, LogOut } from "lucide-react"
+import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/Button"
 import { ThemeToggle } from "@/components/ui/ThemeToggle"
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { user, logout } = useAuth()
+
+  const userDashboardRoute = user
+    ? {
+        PATIENT: "/dashboard/patient",
+        DOCTOR: "/dashboard/doctor",
+        CLINIC_ADMIN: "/dashboard/clinic",
+        PLATFORM_ADMIN: "/dashboard/platform",
+      }[user.role]
+    : "/login"
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/80">
@@ -48,41 +59,39 @@ export function Navbar() {
           {/* Actions */}
           <div className="hidden sm:flex items-center gap-3">
             <ThemeToggle />
-            
-            {/* Quick dashboard demo preview selector */}
-            <div className="relative group">
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                <LayoutDashboard className="w-3.5 h-3.5 text-sky-600" />
-                Dashboards
-              </Button>
-              <div className="absolute right-0 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all dark:border-slate-800 dark:bg-slate-900 z-50">
-                <p className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Preview Roles</p>
-                <Link to="/dashboard/patient" className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-sky-50 hover:text-sky-600 dark:text-slate-300 dark:hover:bg-slate-800">
-                  <span className="w-2 h-2 rounded-full bg-sky-500"></span> Patient Dashboard
+
+            {user ? (
+              <div className="flex items-center gap-2">
+                <Link to={userDashboardRoute}>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs font-semibold">
+                    <LayoutDashboard className="w-3.5 h-3.5 text-teal-600" />
+                    <span>My Dashboard ({user.role})</span>
+                  </Button>
                 </Link>
-                <Link to="/dashboard/doctor" className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-teal-50 hover:text-teal-600 dark:text-slate-300 dark:hover:bg-slate-800">
-                  <span className="w-2 h-2 rounded-full bg-teal-500"></span> Doctor Dashboard
-                </Link>
-                <Link to="/dashboard/clinic" className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 dark:text-slate-300 dark:hover:bg-slate-800">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Clinic Admin Dashboard
-                </Link>
-                <Link to="/dashboard/platform" className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-purple-50 hover:text-purple-600 dark:text-slate-300 dark:hover:bg-slate-800">
-                  <span className="w-2 h-2 rounded-full bg-purple-500"></span> Platform Admin Dashboard
-                </Link>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={logout}
+                  className="text-xs text-slate-500 hover:text-rose-600"
+                  title="Sign out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </Button>
               </div>
-            </div>
-
-            <Link to="/login">
-              <Button variant="ghost" size="sm">
-                Sign In
-              </Button>
-            </Link>
-
-            <Link to="/register">
-              <Button variant="teal" size="sm" className="gap-1.5">
-                Book Visit <ArrowRight className="w-3.5 h-3.5" />
-              </Button>
-            </Link>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost" size="sm">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link to="/register">
+                  <Button variant="teal" size="sm" className="gap-1.5">
+                    Book Visit <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile hamburger */}
@@ -141,29 +150,37 @@ export function Navbar() {
           </div>
 
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
-            <p className="px-3 text-xs font-semibold text-slate-400">Dashboards</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Link to="/dashboard/patient" onClick={() => setMobileMenuOpen(false)} className="text-xs p-2 rounded-lg bg-slate-50 dark:bg-slate-900 font-medium text-slate-700 dark:text-slate-300">
-                Patient Portal
-              </Link>
-              <Link to="/dashboard/doctor" onClick={() => setMobileMenuOpen(false)} className="text-xs p-2 rounded-lg bg-slate-50 dark:bg-slate-900 font-medium text-slate-700 dark:text-slate-300">
-                Doctor Portal
-              </Link>
-              <Link to="/dashboard/clinic" onClick={() => setMobileMenuOpen(false)} className="text-xs p-2 rounded-lg bg-slate-50 dark:bg-slate-900 font-medium text-slate-700 dark:text-slate-300">
-                Clinic Admin
-              </Link>
-              <Link to="/dashboard/platform" onClick={() => setMobileMenuOpen(false)} className="text-xs p-2 rounded-lg bg-slate-50 dark:bg-slate-900 font-medium text-slate-700 dark:text-slate-300">
-                Platform Admin
-              </Link>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Link to="/login" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
-                <Button variant="outline" className="w-full text-xs" size="sm">Sign In</Button>
-              </Link>
-              <Link to="/register" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
-                <Button variant="teal" className="w-full text-xs" size="sm">Register</Button>
-              </Link>
-            </div>
+            {user ? (
+              <div className="space-y-2">
+                <Link
+                  to={userDashboardRoute}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block text-center text-xs p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/50 font-semibold text-teal-700 dark:text-teal-300"
+                >
+                  Go to {user.role} Dashboard
+                </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    logout()
+                    setMobileMenuOpen(false)
+                  }}
+                  className="w-full text-xs"
+                >
+                  Sign Out
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2 pt-2">
+                <Link to="/login" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="outline" className="w-full text-xs" size="sm">Sign In</Button>
+                </Link>
+                <Link to="/register" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="teal" className="w-full text-xs" size="sm">Register</Button>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}
