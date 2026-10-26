@@ -1,0 +1,205 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  PATIENT
+  DOCTOR
+  CLINIC_ADMIN
+  PLATFORM_ADMIN
+}
+
+enum ClinicRole {
+  OWNER
+  MANAGER
+  RECEPTIONIST
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum NotificationType {
+  APPOINTMENT_REMINDER
+  PAYMENT_UPDATE
+  SCHEDULE_CHANGE
+  SYSTEM
+}
+
+model Profile {
+  id        String   @id @default(uuid()) // Corresponds to Supabase auth.users.id
+  email     String   @unique
+  phone     String?
+  firstName String   @map("first_name")
+  lastName  String   @map("last_name")
+  role      Role     @default(PATIENT)
+  avatarUrl String?  @map("avatar_url")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  patient           Patient?
+  doctor            Doctor?
+  clinicMemberships ClinicMembership[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+
+  @@map("profiles")
+}
+
+model Clinic {
+  id         String   @id @default(uuid())
+  name       String
+  slug       String   @unique
+  address    String
+  city       String
+  state      String
+  postalCode String   @map("postal_code")
+  phone      String
+  email      String
+  isVerified Boolean  @default(false) @map("is_verified")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  doctors           Doctor[]
+  clinicMemberships ClinicMembership[]
+  appointments      Appointment[]
+
+  @@map("clinics")
+}
+
+model ClinicMembership {
+  id         String     @id @default(uuid())
+  clinicId   String     @map("clinic_id")
+  profileId  String     @map("profile_id")
+  clinicRole ClinicRole @map("clinic_role")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, profileId])
+  @@map("clinic_memberships")
+}
+
+model Doctor {
+  id                  String   @id @default(uuid())
+  profileId           String   @unique @map("profile_id")
+  clinicId            String?  @map("clinic_id")
+  specialty           String
+  licenseNumber       String   @unique @map("license_number")
+  yearsOfExperience   Int      @default(0) @map("years_of_experience")
+  bio                 String?
+  consultationFee     Decimal  @default(50.00) @map("consultation_fee") @db.Decimal(10, 2)
+  isAcceptingPatients Boolean  @default(true) @map("is_accepting_patients")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  profile      Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  clinic       Clinic?              @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  availability DoctorAvailability[]
+  appointments Appointment[]
+
+  @@map("doctors")
+}
+
+model Patient {
+  id                    String    @id @default(uuid())
+  profileId             String    @unique @map("profile_id")
+  dateOfBirth           DateTime? @map("date_of_birth")
+  gender                String?
+  bloodGroup            String?   @map("blood_group")
+  emergencyContactName  String?   @map("emergency_contact_name")
+  emergencyContactPhone String?   @map("emergency_contact_phone")
+  allergies             String?
+  chronicConditions     String?   @map("chronic_conditions")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  profile      Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@map("patients")
+}
+
+model DoctorAvailability {
+  id                  String   @id @default(uuid())
+  doctorId            String   @map("doctor_id")
+  dayOfWeek           Int      @map("day_of_week") // 0 = Sunday, 6 = Saturday
+  startTime           String   @map("start_time") // Format HH:MM e.g. "09:00"
+  endTime             String   @map("end_time") // Format HH:MM e.g. "17:00"
+  slotDurationMinutes Int      @default(30) @map("slot_duration_minutes")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, dayOfWeek])
+  @@map("doctor_availability")
+}
+
+model Appointment {
+  id                 String            @id @default(uuid())
+  patientId          String            @map("patient_id")
+  doctorId           String            @map("doctor_id")
+  clinicId           String            @map("clinic_id")
+  scheduledStart     DateTime          @map("scheduled_start")
+  scheduledEnd       DateTime          @map("scheduled_end")
+  status             AppointmentStatus @default(PENDING)
+  reasonForVisit     String?           @map("reason_for_visit")
+  cancellationReason String?           @map("cancellation_reason")
+  noShowRiskScore    Decimal?          @map("no_show_risk_score") @db.Decimal(3, 2)
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+
+  @@index([doctorId, scheduledStart])
+  @@index([patientId, scheduledStart])
+  @@map("appointments")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  profileId String           @map("profile_id")
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, isRead])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  profileId     String?  @map("profile_id")
+  action        String
+  resourceTable String   @map("resource_table")
+  resourceId    String   @map("resource_id")
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+
+  @@index([resourceTable, resourceId])
+  @@map("audit_logs")
+}

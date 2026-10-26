@@ -1,6 +1,8 @@
 import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import { Activity, Mail, Lock, ArrowRight, ShieldCheck } from "lucide-react"
+import { Link, useNavigate, useLocation } from "react-router-dom"
+import { Activity, Mail, Lock, ArrowRight, ShieldCheck, AlertCircle } from "lucide-react"
+import { toast } from "sonner"
+import { useAuth, type UserRole } from "@/context/AuthContext"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
@@ -8,26 +10,49 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle"
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const [role, setRole] = useState<"patient" | "doctor" | "clinic" | "platform">("patient")
+  const location = useLocation()
+  const { login } = useAuth()
+
+  const [rolePreset, setRolePreset] = useState<UserRole>("PATIENT")
   const [email, setEmail] = useState("patient@demo.medislot.com")
   const [password, setPassword] = useState("password123")
   const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const handleRoleChange = (newRole: "patient" | "doctor" | "clinic" | "platform") => {
-    setRole(newRole)
-    if (newRole === "patient") setEmail("patient@demo.medislot.com")
-    if (newRole === "doctor") setEmail("dr.jenkins@demo.medislot.com")
-    if (newRole === "clinic") setEmail("admin.metro@demo.medislot.com")
-    if (newRole === "platform") setEmail("superadmin@medislot.com")
+  const handlePresetSelect = (selectedRole: UserRole) => {
+    setRolePreset(selectedRole)
+    setErrorMessage(null)
+    if (selectedRole === "PATIENT") setEmail("patient@demo.medislot.com")
+    if (selectedRole === "DOCTOR") setEmail("dr.jenkins@demo.medislot.com")
+    if (selectedRole === "CLINIC_ADMIN") setEmail("admin.metro@demo.medislot.com")
+    if (selectedRole === "PLATFORM_ADMIN") setEmail("superadmin@medislot.com")
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    setTimeout(() => {
+    setErrorMessage(null)
+
+    try {
+      const loggedUser = await login(email, password)
+      
+      // Determine destination
+      const roleRoutes: Record<UserRole, string> = {
+        PATIENT: "/dashboard/patient",
+        DOCTOR: "/dashboard/doctor",
+        CLINIC_ADMIN: "/dashboard/clinic",
+        PLATFORM_ADMIN: "/dashboard/platform",
+      }
+
+      const from = (location.state as any)?.from?.pathname || roleRoutes[loggedUser.role]
+      navigate(from, { replace: true })
+    } catch (err: any) {
+      const msg = err.message || "Failed to sign in. Please verify your credentials."
+      setErrorMessage(msg)
+      toast.error("Authentication Failed", { description: msg })
+    } finally {
       setIsLoading(false)
-      navigate(`/dashboard/${role}`)
-    }, 600)
+    }
   }
 
   return (
@@ -56,17 +81,18 @@ export function LoginPage() {
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <Card className="border-slate-200 dark:border-slate-800 shadow-xl">
           <CardHeader className="pb-4">
-            <CardTitle className="text-base font-semibold">Select Demo Role to Sign In</CardTitle>
+            <CardTitle className="text-base font-semibold">Select Account Preset</CardTitle>
             <CardDescription className="text-xs">
-              Quickly preview each dashboard role in Phase One
+              Instant login credentials for Phase Two verification
             </CardDescription>
+
             {/* Role quick toggle */}
             <div className="grid grid-cols-4 gap-1.5 pt-2">
               <button
                 type="button"
-                onClick={() => handleRoleChange("patient")}
+                onClick={() => handlePresetSelect("PATIENT")}
                 className={`py-1.5 px-1 rounded-lg text-xs font-semibold border transition-all ${
-                  role === "patient"
+                  rolePreset === "PATIENT"
                     ? "bg-sky-50 border-sky-400 text-sky-700 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700"
                     : "border-slate-200 dark:border-slate-800 text-slate-500"
                 }`}
@@ -75,9 +101,9 @@ export function LoginPage() {
               </button>
               <button
                 type="button"
-                onClick={() => handleRoleChange("doctor")}
+                onClick={() => handlePresetSelect("DOCTOR")}
                 className={`py-1.5 px-1 rounded-lg text-xs font-semibold border transition-all ${
-                  role === "doctor"
+                  rolePreset === "DOCTOR"
                     ? "bg-teal-50 border-teal-400 text-teal-700 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-700"
                     : "border-slate-200 dark:border-slate-800 text-slate-500"
                 }`}
@@ -86,9 +112,9 @@ export function LoginPage() {
               </button>
               <button
                 type="button"
-                onClick={() => handleRoleChange("clinic")}
+                onClick={() => handlePresetSelect("CLINIC_ADMIN")}
                 className={`py-1.5 px-1 rounded-lg text-xs font-semibold border transition-all ${
-                  role === "clinic"
+                  rolePreset === "CLINIC_ADMIN"
                     ? "bg-emerald-50 border-emerald-400 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700"
                     : "border-slate-200 dark:border-slate-800 text-slate-500"
                 }`}
@@ -97,9 +123,9 @@ export function LoginPage() {
               </button>
               <button
                 type="button"
-                onClick={() => handleRoleChange("platform")}
+                onClick={() => handlePresetSelect("PLATFORM_ADMIN")}
                 className={`py-1.5 px-1 rounded-lg text-xs font-semibold border transition-all ${
-                  role === "platform"
+                  rolePreset === "PLATFORM_ADMIN"
                     ? "bg-purple-50 border-purple-400 text-purple-700 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-700"
                     : "border-slate-200 dark:border-slate-800 text-slate-500"
                 }`}
@@ -110,6 +136,13 @@ export function LoginPage() {
           </CardHeader>
 
           <CardContent>
+            {errorMessage && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <Input
                 label="Email address"
@@ -134,7 +167,7 @@ export function LoginPage() {
               <div className="flex items-center justify-between text-xs">
                 <label className="flex items-center gap-2 cursor-pointer text-slate-600 dark:text-slate-400">
                   <input type="checkbox" defaultChecked className="rounded text-teal-600 focus:ring-teal-500" />
-                  <span>Remember me</span>
+                  <span>Remember session</span>
                 </label>
                 <a href="#" className="font-semibold text-teal-600 hover:text-teal-500">
                   Forgot password?
@@ -147,14 +180,14 @@ export function LoginPage() {
                 isLoading={isLoading}
                 className="w-full font-semibold shadow-md shadow-teal-600/20"
               >
-                Sign In to {role.charAt(0).toUpperCase() + role.slice(1)} Workspace <ArrowRight className="w-4 h-4" />
+                Sign In to {rolePreset} Workspace <ArrowRight className="w-4 h-4" />
               </Button>
             </form>
 
             <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-center text-xs text-slate-500">
               Don't have an account?{" "}
               <Link to="/register" className="font-semibold text-teal-600 hover:underline">
-                Create an account
+                Register as Patient
               </Link>
             </div>
           </CardContent>
