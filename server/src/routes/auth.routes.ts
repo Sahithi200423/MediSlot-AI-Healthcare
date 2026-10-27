@@ -39,4 +39,11 @@ router.post("/logout", authenticate, AuthController.logout)
  */
 router.post("/forgot-password", AuthController.forgotPassword)
 
+/**
+ * @route   POST /api/auth/verify-email
+ * @desc    Verify unconfirmed email using OTP/token
+ * @access  Public
+ */
+router.post("/verify-email", AuthController.verifyEmail)
+
 export default router

@@ -16,6 +16,8 @@ export function RegisterPage() {
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [isRegistered, setIsRegistered] = useState(false)
+  const [registeredEmail, setRegisteredEmail] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -37,14 +39,19 @@ export function RegisterPage() {
     }
 
     try {
-      await register({
+      const result = await register({
         email,
         password,
         firstName,
         lastName,
       })
 
-      navigate("/dashboard/patient")
+      if (result.emailConfirmationRequired) {
+        setRegisteredEmail(email)
+        setIsRegistered(true)
+      } else {
+        navigate("/dashboard/patient")
+      }
     } catch (err: any) {
       const msg = err.message || "Registration failed. Please try again."
       setErrorMessage(msg)
@@ -90,14 +97,31 @@ export function RegisterPage() {
           </CardHeader>
 
           <CardContent className="pt-4">
-            {errorMessage && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMessage}</span>
+            {isRegistered ? (
+              <div className="space-y-4 text-center py-4">
+                <div className="w-12 h-12 rounded-full bg-teal-100 dark:bg-teal-900/50 text-teal-600 flex items-center justify-center mx-auto">
+                  <Mail className="w-6 h-6" />
+                </div>
+                <h3 className="font-bold text-slate-900 dark:text-white">Verify Your Email Address</h3>
+                <p className="text-xs text-slate-500">
+                  A verification confirmation has been registered for <strong className="text-slate-800 dark:text-slate-200">{registeredEmail}</strong>. Please check your email to verify your account before logging in.
+                </p>
+                <Link to="/login">
+                  <Button variant="teal" size="sm" className="w-full mt-2">
+                    Proceed to Login
+                  </Button>
+                </Link>
               </div>
-            )}
+            ) : (
+              <>
+                {errorMessage && (
+                  <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <Input
                   label="First Name"
@@ -159,6 +183,8 @@ export function RegisterPage() {
                 Sign in here
               </Link>
             </div>
+            </>
+            )}
           </CardContent>
         </Card>
 

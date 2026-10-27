@@ -1,0 +1,23 @@
+DO $$ BEGIN
+    CREATE TYPE "Role" AS ENUM ('PATIENT', 'DOCTOR', 'CLINIC_ADMIN', 'PLATFORM_ADMIN');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE "ClinicRole" AS ENUM ('OWNER', 'MANAGER', 'RECEPTIONIST');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE "AppointmentStatus" AS ENUM ('PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE "NotificationType" AS ENUM ('APPOINTMENT_REMINDER', 'PAYMENT_UPDATE', 'SCHEDULE_CHANGE', 'SYSTEM');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;

@@ -101,4 +101,30 @@ export class AuthController {
       })
     }
   }
+
+  public static async verifyEmail(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, token } = req.body
+      if (!email || !token) {
+        res.status(400).json({
+          success: false,
+          error: { message: "Email and verification token/OTP are required", statusCode: 400 },
+        })
+        return
+      }
+
+      const result = await AuthService.verifyEmail(email, token)
+      res.status(200).json({
+        success: true,
+        message: "Email verified successfully! You may now sign in.",
+        data: result,
+      })
+    } catch (err: any) {
+      res.status(400).json({
+        success: false,
+        error: { message: err.message || "Email verification failed", statusCode: 400 },
+      })
+    }
+  }
 }
+

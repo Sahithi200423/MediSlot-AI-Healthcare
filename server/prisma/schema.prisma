@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -12,21 +13,29 @@ enum Role {
   DOCTOR
   CLINIC_ADMIN
   PLATFORM_ADMIN
+
+  @@map("user_role")
 }
 
 enum ClinicRole {
   OWNER
   MANAGER
   RECEPTIONIST
+
+  @@map("clinic_role")
 }
 
 enum AppointmentStatus {
   PENDING
   CONFIRMED
+  CHECKED_IN
+  IN_CONSULTATION
   IN_PROGRESS
   COMPLETED
   CANCELLED
   NO_SHOW
+
+  @@map("appointment_status")
 }
 
 enum NotificationType {
@@ -34,6 +43,37 @@ enum NotificationType {
   PAYMENT_UPDATE
   SCHEDULE_CHANGE
   SYSTEM
+  APPOINTMENT_BOOKED
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_RESCHEDULED
+
+  @@map("notification_type")
+}
+
+enum MedicalRecordCategory {
+  LAB_REPORT
+  PRESCRIPTION
+  IMAGING_SCAN
+  DISCHARGE_SUMMARY
+  VACCINATION_RECORD
+  OTHER
+
+  @@map("medical_record_category")
+}
+
+enum ScanStatus {
+  CLEAN
+  PENDING_SCAN
+  QUARANTINED
+
+  @@map("scan_status")
+}
+
+enum NoteStatus {
+  DRAFT
+  FINALIZED
+
+  @@map("note_status")
 }
 
 model Profile {
@@ -49,11 +89,15 @@ model Profile {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relationships
-  patient           Patient?
-  doctor            Doctor?
-  clinicMemberships ClinicMembership[]
-  notifications     Notification[]
-  auditLogs         AuditLog[]
+  patient                 Patient?
+  doctor                  Doctor?
+  clinicMemberships       ClinicMembership[]
+  notifications           Notification[]
+  auditLogs               AuditLog[]
+  uploadedMedicalRecords  MedicalRecord[]
+  grantedRecordAccesses   DoctorRecordAccess[]
+  finalizedClinicalNotes  ClinicalNote[]       @relation("FinalizedNotes")
+  reviewedAiAnalyses      AiAnalysis[]         @relation("ReviewedAiAnalyses")
 
   @@map("profiles")
 }
@@ -68,14 +112,18 @@ model Clinic {
   postalCode String   @map("postal_code")
   phone      String
   email      String
-  isVerified Boolean  @default(false) @map("is_verified")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  isVerified     Boolean            @default(false) @map("is_verified")
+  operatingHours String             @default("08:00 - 20:00") @map("operating_hours")
+  timezone       String             @default("UTC")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
 
   // Relationships
   doctors           Doctor[]
   clinicMemberships ClinicMembership[]
   appointments      Appointment[]
+  invitations       ClinicInvitation[]
+  prescriptions     Prescription[]
 
   @@map("clinics")
 }
@@ -100,6 +148,8 @@ model Doctor {
   clinicId            String?  @map("clinic_id")
   specialty           String
   licenseNumber       String   @unique @map("license_number")
+  licenseVerified     Boolean  @default(false) @map("license_verified")
+  qualifications      String?
   yearsOfExperience   Int      @default(0) @map("years_of_experience")
   bio                 String?
   consultationFee     Decimal  @default(50.00) @map("consultation_fee") @db.Decimal(10, 2)
@@ -109,8 +159,14 @@ model Doctor {
 
   profile      Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
   clinic       Clinic?              @relation(fields: [clinicId], references: [id], onDelete: SetNull)
-  availability DoctorAvailability[]
-  appointments Appointment[]
+  availability         DoctorAvailability[]
+  breaks               DoctorBreak[]
+  leaves               DoctorLeave[]
+  appointments         Appointment[]
+  doctorRecordAccesses DoctorRecordAccess[]
+  clinicalNotes        ClinicalNote[]
+  prescriptions        Prescription[]
+  aiAnalyses           AiAnalysis[]
 
   @@map("doctors")
 }
@@ -128,8 +184,14 @@ model Patient {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  profile      Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  appointments Appointment[]
+  profile              Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  appointments         Appointment[]
+  medicalRecords       MedicalRecord[]
+  doctorRecordAccesses DoctorRecordAccess[]
+  clinicalNotes        ClinicalNote[]
+  prescriptions        Prescription[]
+  aiAnalyses           AiAnalysis[]
+  aiConsent            PatientAiConsent?
 
   @@map("patients")
 }
@@ -152,24 +214,33 @@ model DoctorAvailability {
 
 model Appointment {
   id                 String            @id @default(uuid())
+  bookingReference   String            @unique @default(uuid()) @map("booking_reference")
   patientId          String            @map("patient_id")
   doctorId           String            @map("doctor_id")
   clinicId           String            @map("clinic_id")
   scheduledStart     DateTime          @map("scheduled_start")
   scheduledEnd       DateTime          @map("scheduled_end")
   status             AppointmentStatus @default(PENDING)
+  visitType          String            @default("IN_CLINIC") @map("visit_type")
+  consultationFee    Decimal           @default(50.00) @map("consultation_fee") @db.Decimal(10, 2)
+  paymentStatus      String            @default("PENDING") @map("payment_status")
+  paymentMethod      String?           @default("PAY_AT_CLINIC") @map("payment_method")
+  checkInTime        DateTime?         @map("check_in_time")
   reasonForVisit     String?           @map("reason_for_visit")
   cancellationReason String?           @map("cancellation_reason")
   noShowRiskScore    Decimal?          @map("no_show_risk_score") @db.Decimal(3, 2)
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
 
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Restrict)
-  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient      Patient        @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  doctor       Doctor         @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  clinic       Clinic         @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  clinicalNote ClinicalNote?
+  prescriptions Prescription[]
 
   @@index([doctorId, scheduledStart])
   @@index([patientId, scheduledStart])
+  @@index([clinicId, scheduledStart])
   @@map("appointments")
 }
 
@@ -203,3 +274,209 @@ model AuditLog {
   @@index([resourceTable, resourceId])
   @@map("audit_logs")
 }
+
+model DoctorBreak {
+  id        String   @id @default(uuid())
+  doctorId  String   @map("doctor_id")
+  dayOfWeek Int      @map("day_of_week") // 0 = Sunday, 6 = Saturday
+  startTime String   @map("start_time") // Format HH:MM e.g. "13:00"
+  endTime   String   @map("end_time") // Format HH:MM e.g. "14:00"
+  title     String   @default("Break")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, dayOfWeek])
+  @@map("doctor_breaks")
+}
+
+model DoctorLeave {
+  id         String   @id @default(uuid())
+  doctorId   String   @map("doctor_id")
+  startDate  DateTime @map("start_date")
+  endDate    DateTime @map("end_date")
+  reason     String?
+  isApproved Boolean  @default(true) @map("is_approved")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, startDate])
+  @@map("doctor_leaves")
+}
+
+model ClinicInvitation {
+  id        String   @id @default(uuid())
+  clinicId  String   @map("clinic_id")
+  email     String
+  role      Role     @default(DOCTOR)
+  token     String   @unique
+  status    String   @default("PENDING") // PENDING, ACCEPTED, REVOKED
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, email])
+  @@map("clinic_invitations")
+}
+
+model MedicalRecord {
+  id                   String                @id @default(uuid())
+  patientId            String                @map("patient_id")
+  uploadedByProfileId  String                @map("uploaded_by_profile_id")
+  title                String
+  description          String?
+  category             MedicalRecordCategory @default(OTHER)
+  fileName             String                @map("file_name")
+  storagePath          String                @map("storage_path")
+  fileType             String                @map("file_type")
+  fileSize             Int                   @map("file_size")
+  scanStatus           ScanStatus            @default(CLEAN) @map("scan_status")
+  isArchived           Boolean               @default(false) @map("is_archived")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+
+  patient          Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  uploadedByProfile Profile     @relation(fields: [uploadedByProfileId], references: [id], onDelete: Cascade)
+  aiAnalyses        AiAnalysis[]
+
+  @@index([patientId, createdAt])
+  @@index([category])
+  @@map("medical_records")
+}
+
+model DoctorRecordAccess {
+  id                 String    @id @default(uuid())
+  patientId          String    @map("patient_id")
+  doctorId           String    @map("doctor_id")
+  grantedByProfileId String    @map("granted_by_profile_id")
+  isRevoked          Boolean   @default(false) @map("is_revoked")
+  revokedAt          DateTime? @map("revoked_at")
+  expiresAt          DateTime? @map("expires_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  patient          Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor           Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  grantedByProfile Profile @relation(fields: [grantedByProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, doctorId])
+  @@index([patientId, doctorId, isRevoked])
+  @@map("doctor_record_access")
+}
+
+model ClinicalNote {
+  id                    String     @id @default(uuid())
+  appointmentId         String     @unique @map("appointment_id")
+  patientId             String     @map("patient_id")
+  doctorId              String     @map("doctor_id")
+  subjective            String
+  objective             String
+  assessment            String
+  plan                  String
+  status                NoteStatus @default(DRAFT)
+  finalizedAt           DateTime?  @map("finalized_at")
+  finalizedByProfileId  String?    @map("finalized_by_profile_id")
+  amendmentNotes        String?    @map("amendment_notes")
+  createdAt             DateTime   @default(now()) @map("created_at")
+  updatedAt             DateTime   @updatedAt @map("updated_at")
+
+  appointment         Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patient             Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor              Doctor      @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  finalizedByProfile  Profile?    @relation("FinalizedNotes", fields: [finalizedByProfileId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@map("clinical_notes")
+}
+
+model Prescription {
+  id                  String             @id @default(uuid())
+  prescriptionNumber  String             @unique @map("prescription_number")
+  appointmentId       String             @map("appointment_id")
+  patientId           String             @map("patient_id")
+  doctorId            String             @map("doctor_id")
+  clinicId            String?            @map("clinic_id")
+  diagnosis           String?
+  generalInstructions String?            @map("general_instructions")
+  followUpDate        DateTime?          @map("follow_up_date") @db.Date
+  pdfStoragePath      String?            @map("pdf_storage_path")
+  issuedAt            DateTime           @default(now()) @map("issued_at")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  appointment Appointment        @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patient     Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic      Clinic?            @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  items       PrescriptionItem[]
+
+  @@index([patientId, issuedAt])
+  @@index([doctorId])
+  @@index([appointmentId])
+  @@map("prescriptions")
+}
+
+model PrescriptionItem {
+  id             String   @id @default(uuid())
+  prescriptionId String   @map("prescription_id")
+  medicineName   String   @map("medicine_name")
+  dosage         String
+  frequency      String
+  duration       String
+  instructions   String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+  @@map("prescription_items")
+}
+
+model PatientAiConsent {
+  id           String    @id @default(uuid())
+  patientId    String    @unique @map("patient_id")
+  consentGiven Boolean   @default(false) @map("consent_given")
+  consentDate  DateTime  @default(now()) @map("consent_date")
+  ipAddress    String?   @map("ip_address")
+  revokedAt    DateTime? @map("revoked_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, consentGiven])
+  @@map("patient_ai_consent")
+}
+
+model AiAnalysis {
+  id                   String    @id @default(uuid())
+  patientId            String    @map("patient_id")
+  doctorId             String?   @map("doctor_id")
+  medicalRecordId      String?   @map("medical_record_id")
+  analysisType         String    @map("analysis_type") // LAB_SUMMARY, DOCUMENT_SUMMARY, CONSULTATION_DRAFT, CLINICAL_QA, PATIENT_EXPLANATION
+  extractedData        Json?     @map("extracted_data")
+  summary              String
+  plainLanguageSummary String?   @map("plain_language_summary")
+  disclaimer           String
+  reviewedByProfileId  String?   @map("reviewed_by_profile_id")
+  reviewedAt           DateTime? @map("reviewed_at")
+  reviewStatus         String    @default("PENDING_REVIEW") @map("review_status") // PENDING_REVIEW, ACCEPTED, REJECTED, MODIFIED
+  clinicianNotes       String?   @map("clinician_notes")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  patient           Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor            Doctor?        @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  medicalRecord     MedicalRecord? @relation(fields: [medicalRecordId], references: [id], onDelete: SetNull)
+  reviewedByProfile Profile?       @relation("ReviewedAiAnalyses", fields: [reviewedByProfileId], references: [id], onDelete: SetNull)
+
+  @@index([patientId, createdAt])
+  @@index([medicalRecordId])
+  @@index([doctorId])
+  @@index([reviewStatus])
+  @@map("ai_analyses")
+}
+
+

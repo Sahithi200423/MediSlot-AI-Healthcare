@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react"
 import { toast } from "sonner"
+import { isSupabaseConfigured } from "@/lib/supabase"
 
 export type UserRole = "PATIENT" | "DOCTOR" | "CLINIC_ADMIN" | "PLATFORM_ADMIN"
 
@@ -17,7 +18,7 @@ interface AuthContextType {
   token: string | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<UserProfile>
-  register: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<UserProfile>
+  register: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<{ user: UserProfile; emailConfirmationRequired?: boolean }>
   logout: () => void
   switchDemoRole: (role: UserRole) => Promise<void>
 }
@@ -108,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string
     firstName: string
     lastName: string
-  }): Promise<UserProfile> => {
+  }): Promise<{ user: UserProfile; emailConfirmationRequired?: boolean }> => {
     setIsLoading(true)
     try {
       const res = await fetch(`${API_BASE}/auth/register`, {
@@ -125,17 +126,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const newUser = json.data.user
       const accessToken = json.data.token
+      const emailConfirmationRequired = json.data.emailConfirmationRequired
 
-      setUser(newUser)
-      setToken(accessToken)
-      localStorage.setItem("medislot_user", JSON.stringify(newUser))
-      localStorage.setItem("medislot_token", accessToken)
+      if (accessToken) {
+        setUser(newUser)
+        setToken(accessToken)
+        localStorage.setItem("medislot_user", JSON.stringify(newUser))
+        localStorage.setItem("medislot_token", accessToken)
 
-      toast.success("Account Created!", {
-        description: "Welcome to MediSlot Healthcare.",
-      })
+        toast.success("Account Created!", {
+          description: "Welcome to MediSlot Healthcare.",
+        })
+      } else {
+        toast.info("Verification Required", {
+          description: "Please verify your email address to log in.",
+        })
+      }
 
-      return newUser
+      return { user: newUser, emailConfirmationRequired }
     } finally {
       setIsLoading(false)
     }
@@ -150,6 +158,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const switchDemoRole = async (targetRole: UserRole) => {
+    if (isSupabaseConfigured) {
+      toast.error("Demo role switching is disabled in live Supabase mode", {
+        description: "Please register or log in with verified Supabase credentials.",
+      })
+      return
+    }
+
     const roleCredentials: Record<UserRole, { email: string; pass: string }> = {
       PATIENT: { email: "patient@demo.medislot.com", pass: "password123" },
       DOCTOR: { email: "dr.jenkins@demo.medislot.com", pass: "password123" },

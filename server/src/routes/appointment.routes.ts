@@ -1,58 +1,28 @@
-import { Router, Request, Response } from "express"
-import { authenticate, requireRole } from "../middleware/auth.js"
+import { Router } from "express"
+import { AppointmentController } from "../controllers/appointment.controller.js"
+import { authenticate, requireRole, requireClinicAccess, requireDoctorAccess } from "../middleware/auth.js"
 
 const router = Router()
 
-/**
- * @route   GET /api/appointments/my
- * @desc    Get appointments isolated to the authenticated user's role and identity
- * @access  Protected
- */
-router.get("/my", authenticate, async (req: Request, res: Response) => {
-  const user = req.user!
+// All appointment endpoints require authentication
+router.use(authenticate)
 
-  // Synthetic records demonstrating tenant and user-level isolation
-  const sampleData = {
-    scopedUserId: user.id,
-    scopedRole: user.role,
-    records: [
-      {
-        id: "apt-101",
-        patientName: user.role === "PATIENT" ? `${user.firstName} ${user.lastName}` : "Alex Turner",
-        doctorName: user.role === "DOCTOR" ? `${user.firstName} ${user.lastName}` : "Dr. Sarah Jenkins",
-        scheduledStart: "2026-10-27T10:30:00Z",
-        status: "CONFIRMED",
-        accessNotice: `Data isolated strictly for ${user.role} (${user.email})`,
-      },
-    ],
-  }
+// Patient booking and personal appointments ledger
+router.post("/", AppointmentController.bookAppointment)
+router.get("/my", AppointmentController.getMyAppointments)
 
-  res.status(200).json({
-    success: true,
-    data: sampleData,
-  })
-})
+// User notifications
+router.get("/notifications", AppointmentController.getNotifications)
+router.patch("/notifications/:id/read", AppointmentController.markNotificationRead)
 
-/**
- * @route   GET /api/appointments/admin-metrics
- * @desc    Restricted endpoint only accessible to PLATFORM_ADMIN
- * @access  Protected (SuperAdmin only)
- */
-router.get(
-  "/admin-metrics",
-  authenticate,
-  requireRole(["PLATFORM_ADMIN"]),
-  async (req: Request, res: Response) => {
-    res.status(200).json({
-      success: true,
-      message: "Authorized Platform Admin metrics unlocked",
-      data: {
-        totalGlobalAppointments: 15482,
-        activeClinics: 38,
-        platformStatus: "NOMINAL",
-      },
-    })
-  }
-)
+// Doctor-specific and Clinic-specific appointment rosters
+router.get("/doctor/:doctorId", requireDoctorAccess, AppointmentController.getDoctorAppointments)
+router.get("/clinic/:clinicId", requireRole(["CLINIC_ADMIN", "PLATFORM_ADMIN"]), requireClinicAccess, AppointmentController.getClinicAppointments)
+
+// Single appointment actions (Inspect, Cancel, Reschedule, Status Transition)
+router.get("/:id", AppointmentController.getAppointmentById)
+router.post("/:id/cancel", AppointmentController.cancelAppointment)
+router.post("/:id/reschedule", AppointmentController.rescheduleAppointment)
+router.patch("/:id/status", requireRole(["DOCTOR", "CLINIC_ADMIN", "PLATFORM_ADMIN"]), AppointmentController.updateStatus)
 
 export default router

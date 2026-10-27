@@ -13,6 +13,7 @@ export interface AuthenticatedUser {
   firstName: string
   lastName: string
   clinicId?: string | null
+  clinicIds: string[]
 }
 
 declare global {
@@ -49,43 +50,69 @@ export async function authenticate(
   try {
     const supabase = getSupabaseAdmin()
 
-    // 1. Try Supabase Auth Token Verification if configured
+    // 1. Supabase Auth Token Verification (Production / Live Supabase Mode)
     if (supabase) {
       const { data: { user }, error } = await supabase.auth.getUser(token)
 
-      if (!error && user) {
-        // Query user profile from Prisma if DB connected
-        let profile = null
-        try {
-          profile = await prisma.profile.findUnique({
-            where: { id: user.id },
-            include: {
-              doctor: true,
-              clinicMemberships: true,
-            },
-          })
-        } catch (dbErr) {
-          // If DB is offline, read from metadata
-        }
-
-        const role = (profile?.role || user.user_metadata?.role || "PATIENT") as UserRole
-        const firstName = profile?.firstName || user.user_metadata?.first_name || "User"
-        const lastName = profile?.lastName || user.user_metadata?.last_name || ""
-        const clinicId = profile?.doctor?.clinicId || profile?.clinicMemberships?.[0]?.clinicId || null
-
-        req.user = {
-          id: user.id,
-          email: user.email || "",
-          role,
-          firstName,
-          lastName,
-          clinicId,
-        }
-        return next()
+      if (error || !user) {
+        res.status(401).json({
+          success: false,
+          error: {
+            message: "Invalid or expired Supabase session. Please log in again.",
+            statusCode: 401,
+          },
+        })
+        return
       }
+
+      // Query user profile from Prisma
+      let profile = null
+      try {
+        profile = await prisma.profile.findUnique({
+          where: { id: user.id },
+          include: {
+            doctor: true,
+            clinicMemberships: true,
+          },
+        })
+      } catch (dbErr) {
+        // Fallback to metadata if DB read encounters transient error
+      }
+
+      const role = (profile?.role || user.user_metadata?.role || "PATIENT") as UserRole
+      const firstName = profile?.firstName || user.user_metadata?.first_name || "User"
+      const lastName = profile?.lastName || user.user_metadata?.last_name || ""
+      const membershipClinicIds: string[] = profile?.clinicMemberships?.map((m: any) => m.clinicId) || []
+      if (profile?.doctor?.clinicId && !membershipClinicIds.includes(profile.doctor.clinicId)) {
+        membershipClinicIds.push(profile.doctor.clinicId)
+      }
+      const clinicId = membershipClinicIds[0] || null
+
+      req.user = {
+        id: user.id,
+        email: user.email || "",
+        role,
+        firstName,
+        lastName,
+        clinicId,
+        clinicIds: membershipClinicIds,
+      }
+      return next()
     }
 
-    // 2. Local JWT Verification Fallback (for development / mock sessions)
+    // 2. Strict Protection: If Supabase credentials are configured, NEVER allow mock JWT fallback
+    if (config.supabaseUrl && (config.supabaseAnonKey || config.supabaseServiceRoleKey)) {
+      res.status(401).json({
+        success: false,
+        error: {
+          message: "Real Supabase authentication is enforced. Mock sessions are rejected.",
+          statusCode: 401,
+        },
+      })
+      return
+    }
+
+    // 3. Offline Dev Fallback ONLY when Supabase credentials are completely omitted
     const decoded = jwt.verify(token, config.jwtSecret) as any
 
     if (!decoded || !decoded.id) {
@@ -103,6 +130,7 @@ export async function authenticate(
       firstName: decoded.firstName || "Demo",
       lastName: decoded.lastName || "User",
       clinicId: decoded.clinicId || null,
+      clinicIds: decoded.clinicId ? [decoded.clinicId] : [],
     }
     next()
   } catch (err: any) {
@@ -153,7 +181,7 @@ export function requireClinicAccess(
   res: Response,
   next: NextFunction
 ): void {
-  const requestedClinicId = req.params.clinicId || req.body.clinicId || req.query.clinicId
+  const requestedClinicId = (req.params.clinicId || req.body.clinicId || req.query.clinicId) as string
 
   if (!req.user) {
     res.status(401).json({ success: false, error: { message: "Authentication required", statusCode: 401 } })
@@ -166,7 +194,7 @@ export function requireClinicAccess(
   }
 
   // Check if user is associated with this clinic
-  if (!requestedClinicId || req.user.clinicId !== requestedClinicId) {
+  if (!requestedClinicId || !req.user.clinicIds || !req.user.clinicIds.includes(requestedClinicId)) {
     res.status(403).json({
       success: false,
       error: {
@@ -179,3 +207,73 @@ export function requireClinicAccess(
 
   next()
 }
+
+/**
+ * Doctor Scoping Middleware:
+ * Verifies that the authenticated user is either:
+ * 1. The doctor themselves
+ * 2. A CLINIC_ADMIN of the clinic where this doctor practices
+ * 3. PLATFORM_ADMIN
+ */
+export async function requireDoctorAccess(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const doctorId = (req.params.doctorId || req.body.doctorId) as string
+
+  if (!req.user) {
+    res.status(401).json({ success: false, error: { message: "Authentication required", statusCode: 401 } })
+    return
+  }
+
+  if (req.user.role === "PLATFORM_ADMIN") {
+    return next()
+  }
+
+  if (!doctorId) {
+    res.status(400).json({ success: false, error: { message: "Doctor ID is required", statusCode: 400 } })
+    return
+  }
+
+  try {
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: doctorId },
+      select: { profileId: true, clinicId: true },
+    })
+
+    if (!doctor) {
+      res.status(404).json({ success: false, error: { message: "Doctor not found", statusCode: 404 } })
+      return
+    }
+
+    // A. Doctor themselves
+    if (doctor.profileId === req.user.id) {
+      return next()
+    }
+
+    // B. Clinic Admin of the doctor's specific clinic
+    if (
+      req.user.role === "CLINIC_ADMIN" &&
+      doctor.clinicId &&
+      req.user.clinicIds &&
+      req.user.clinicIds.includes(doctor.clinicId)
+    ) {
+      return next()
+    }
+
+    res.status(403).json({
+      success: false,
+      error: {
+        message: "Forbidden: You do not have permission to manage this doctor's profile, schedule, or appointments",
+        statusCode: 403,
+      },
+    })
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: { message: err.message || "Doctor authorization check failed", statusCode: 500 },
+    })
+  }
+}
+

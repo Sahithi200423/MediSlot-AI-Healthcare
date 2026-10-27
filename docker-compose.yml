@@ -64,6 +64,22 @@ services:
     environment:
       - VITE_API_URL=http://localhost:5000/api
 
+  # 5. Python FastAPI Clinical AI Copilot Microservice
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: medislot-ai-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - AI_SERVICE_HOST=0.0.0.0
+      - AI_SERVICE_PORT=8000
+      - AI_SERVICE_SECRET=${AI_SERVICE_SECRET:-medislot-internal-ai-secret-2026}
+      - AI_PROVIDER=${AI_PROVIDER:-deterministic_local}
+
+
 volumes:
   postgres_data:
   redis_data:

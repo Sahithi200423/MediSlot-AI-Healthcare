@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken"
 import bcrypt from "bcryptjs"
 import { config } from "../config/env.js"
-import { getSupabaseAdmin } from "../config/supabase.js"
+import { getSupabaseAdmin, getSupabaseClient } from "../config/supabase.js"
 import { prisma } from "../config/db.js"
 import { RegisterInput, LoginInput } from "../validators/auth.validator.js"
 import { UserRole } from "../middleware/auth.js"
@@ -70,15 +70,15 @@ export class AuthService {
 
     // 1. If Supabase is connected
     if (supabase) {
-      const { data: authData, error } = await supabase.auth.signUp({
+      // Enforce genuine email verification: do NOT bypass email confirmation
+      const { data: authData, error } = await supabase.auth.admin.createUser({
         email: data.email,
         password: data.password,
-        options: {
-          data: {
-            first_name: data.firstName,
-            last_name: data.lastName,
-            role: sanitizedRole,
-          },
+        email_confirm: false, // Genuine email verification enforced
+        user_metadata: {
+          first_name: data.firstName,
+          last_name: data.lastName,
+          role: sanitizedRole,
         },
       })
 
@@ -86,28 +86,48 @@ export class AuthService {
         throw new Error(error.message)
       }
 
-      const userId = authData.user?.id || `user-${Date.now()}`
-
-      // Create profile in Prisma if DB is reachable
-      try {
-        await prisma.profile.create({
-          data: {
-            id: userId,
-            email: data.email,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            role: sanitizedRole,
-            phone: data.phone,
-            patient: {
-              create: {},
-            },
-          },
-        })
-      } catch (dbErr) {
-        console.warn("Prisma profile sync failed:", dbErr)
+      if (!authData.user) {
+        throw new Error("Failed to provision Supabase user")
       }
 
-      const token = authData.session?.access_token || this.generateDevToken(userId, data.email, sanitizedRole, data.firstName, data.lastName)
+      const userId = authData.user.id
+
+      // If user profile is not yet created by the DB trigger, create it now
+      try {
+        const existing = await prisma.profile.findUnique({ where: { id: userId } })
+        if (!existing) {
+          await prisma.profile.create({
+            data: {
+              id: userId,
+              email: data.email,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              role: sanitizedRole,
+              phone: data.phone,
+              patient: {
+                create: {},
+              },
+            },
+          })
+        }
+      } catch (dbErr) {
+        console.warn("Prisma profile sync notice:", dbErr)
+      }
+
+      // Generate genuine Supabase verification action link and OTP
+      let verificationLink: string | null = null
+      let emailOtp: string | null = null
+      try {
+        const linkRes = await supabase.auth.admin.generateLink({
+          type: "signup",
+          email: data.email,
+          password: data.password,
+        })
+        verificationLink = linkRes.data?.properties?.action_link || null
+        emailOtp = linkRes.data?.properties?.email_otp || null
+      } catch (linkErr) {
+        console.warn("Could not generate verification link:", linkErr)
+      }
 
       return {
         user: {
@@ -117,12 +137,20 @@ export class AuthService {
           lastName: data.lastName,
           role: sanitizedRole,
         },
-        token,
-        emailConfirmationRequired: !authData.session,
+        token: null, // No token until email is verified
+        emailConfirmationRequired: true,
+        verificationLink,
+        emailOtp,
+        message: "Registration successful. Please verify your email address to log in.",
       }
     }
 
-    // 2. Local Fallback Mode
+    // Guard: Never allow fallback if Supabase is configured
+    if (config.supabaseUrl && (config.supabaseAnonKey || config.supabaseServiceRoleKey)) {
+      throw new Error("Supabase authentication is active. Offline registration fallback is disabled.")
+    }
+
+    // 2. Offline Fallback Mode ONLY when Supabase credentials are not provided
     const existing = localDevUsers.find((u) => u.email.toLowerCase() === data.email.toLowerCase())
     if (existing) {
       throw new Error("A user with this email address already exists")
@@ -201,7 +229,12 @@ export class AuthService {
       }
     }
 
-    // 2. Local Fallback Mode
+    // Guard: Never allow fallback if Supabase is configured
+    if (config.supabaseUrl && (config.supabaseAnonKey || config.supabaseServiceRoleKey)) {
+      throw new Error("Supabase authentication is active. Offline demo login is disabled.")
+    }
+
+    // 2. Offline Fallback Mode ONLY when Supabase credentials are not provided
     const user = localDevUsers.find((u) => u.email.toLowerCase() === data.email.toLowerCase())
     if (!user) {
       throw new Error("Invalid email or password")
@@ -224,6 +257,38 @@ export class AuthService {
         clinicId: user.clinicId,
       },
       token,
+    }
+  }
+
+  /**
+   * Verifies an unconfirmed email address using Supabase OTP / Token
+   */
+  public static async verifyEmail(email: string, token: string) {
+    const supabase = getSupabaseClient()
+    if (!supabase) {
+      throw new Error("Supabase client not configured")
+    }
+
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: "signup",
+    })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    let profile = null
+    try {
+      profile = await prisma.profile.findUnique({
+        where: { id: data.user?.id },
+      })
+    } catch (e) {}
+
+    return {
+      user: profile || data.user,
+      session: data.session,
     }
   }
 
