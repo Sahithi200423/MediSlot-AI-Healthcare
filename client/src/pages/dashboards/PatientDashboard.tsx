@@ -1,14 +1,11 @@
 import { useState, useEffect } from "react"
 import { 
-  Calendar, Clock, User, Search, CreditCard, FileText, 
-  Bell, CheckCircle2, Upload, Plus, Building2, Stethoscope, 
+  Calendar, Clock, Search, FileText, 
+  CheckCircle2, Upload, Plus, Building2, Stethoscope, 
   ChevronRight, Loader2, RefreshCw, XCircle,
   Eye, Check, ShieldCheck, Trash2, Key, Pill, Sparkles
 } from "lucide-react"
 import { DashboardShell, type NavItem } from "@/components/layout/DashboardShell"
-import { Card, CardContent } from "@/components/ui/Card"
-import { Button } from "@/components/ui/Button"
-import { Badge } from "@/components/ui/Badge"
 import { useAuth } from "@/context/AuthContext"
 import { 
   api, 
@@ -118,22 +115,21 @@ export function PatientDashboard() {
         api.getAiConsent(user.id).then(setAiConsent).catch(() => {})
       }
     } catch (err: any) {
-      console.warn("Medical records load notice:", err.message)
+      console.error("Failed to load records/prescriptions:", err)
+      toast.error(err.message || "Failed to load medical records")
     } finally {
       setLoadingRecords(false)
     }
   }
 
   const handleDeleteRecord = async (recordId: string) => {
-    if (!window.confirm("Are you sure you want to delete this medical record? This action permanently purges the file from the secure medical vault.")) {
-      return
-    }
+    if (!window.confirm("Are you sure you want to delete this medical record? This cannot be undone.")) return
     try {
       await api.deleteMedicalRecord(recordId)
-      toast.success("Medical record deleted permanently.")
       setMedicalRecords((prev) => prev.filter((r) => r.id !== recordId))
+      toast.success("Medical record deleted.")
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete medical record")
+      toast.error(err.message || "Failed to delete record")
     }
   }
 
@@ -147,46 +143,46 @@ export function PatientDashboard() {
       setUpcomingAppointments(upcoming)
       setPastAppointments(past)
     } catch (err: any) {
-      console.warn("Appointments notice:", err.message)
+      console.error("Failed to load appointments:", err)
     } finally {
       setLoadingAppointments(false)
-    }
-  }
-
-  const loadNotifications = async () => {
-    try {
-      const res = await api.getNotifications()
-      setNotifications(res.notifications || [])
-      setUnreadCount(res.unreadCount || 0)
-    } catch (err: any) {
-      console.warn("Notifications notice:", err.message)
     }
   }
 
   const fetchDoctorsAndClinics = async () => {
     setLoadingProviders(true)
     try {
-      const [fetchedDocs, fetchedClinics] = await Promise.all([
-        api.getDoctors(selectedSpecialty, searchQuery),
+      const [docs, cls] = await Promise.all([
+        api.getDoctors(selectedSpecialty === "all" ? undefined : selectedSpecialty, searchQuery || undefined),
         api.getClinics(),
       ])
-      setDoctors(fetchedDocs)
-      setClinics(fetchedClinics)
+      setDoctors(docs)
+      setClinics(cls)
     } catch (err: any) {
-      toast.error("Failed to load providers", { description: err.message })
+      console.error("Failed to load doctors:", err)
     } finally {
       setLoadingProviders(false)
     }
   }
 
-  const handleInspectSlots = async (doctor: Doctor) => {
-    setSelectedDoctor(doctor)
+  const loadNotifications = async () => {
+    try {
+      const data = await api.getNotifications()
+      setNotifications(data.notifications || [])
+      setUnreadCount(data.unreadCount || 0)
+    } catch (err: any) {
+      console.error("Failed to load notifications:", err)
+    }
+  }
+
+  const handleInspectSlots = async (doc: Doctor) => {
+    setSelectedDoctor(doc)
     setLoadingSlots(true)
     try {
-      const res = await api.getAvailability(doctor.id, selectedDate)
-      setAvailability(res)
+      const data = await api.getAvailability(doc.id, selectedDate)
+      setAvailability(data)
     } catch (err: any) {
-      toast.error("Could not fetch slots", { description: err.message })
+      toast.error(err.message || "Failed to calculate slots")
     } finally {
       setLoadingSlots(false)
     }
@@ -194,61 +190,56 @@ export function PatientDashboard() {
 
   const handleDateChange = async (date: string) => {
     setSelectedDate(date)
-    if (!selectedDoctor) return
-    setLoadingSlots(true)
-    try {
-      const res = await api.getAvailability(selectedDoctor.id, date)
-      setAvailability(res)
-    } catch (err: any) {
-      toast.error("Could not fetch slots", { description: err.message })
-    } finally {
-      setLoadingSlots(false)
+    if (selectedDoctor) {
+      setLoadingSlots(true)
+      try {
+        const data = await api.getAvailability(selectedDoctor.id, date)
+        setAvailability(data)
+      } catch (err: any) {
+        toast.error(err.message || "Failed to calculate slots")
+      } finally {
+        setLoadingSlots(false)
+      }
     }
   }
 
-  const handleOpenBooking = (doctor?: Doctor) => {
-    setDoctorToBook(doctor || (doctors.length > 0 ? doctors[0] : null))
+  const handleOpenBooking = (doc?: Doctor) => {
+    setDoctorToBook(doc || null)
     setIsBookingOpen(true)
   }
 
-  const handleBookingSuccess = (newApt: Appointment) => {
-    setUpcomingAppointments((prev) => [newApt, ...prev])
-    loadNotifications()
+  const handleBookingSuccess = () => {
+    toast.success("Appointment reserved successfully!")
+    loadAppointments()
+    setActiveTab("upcoming")
   }
 
-  const handleRescheduled = (updatedApt: Appointment) => {
-    setUpcomingAppointments((prev) =>
-      prev.map((apt) => (apt.id === updatedApt.id ? updatedApt : apt))
-    )
-    loadNotifications()
+  const handleRescheduled = () => {
+    toast.success("Appointment rescheduled successfully")
+    loadAppointments()
   }
 
-  const handleCancelled = (cancelledApt: Appointment) => {
-    setUpcomingAppointments((prev) =>
-      prev.filter((apt) => apt.id !== cancelledApt.id)
-    )
-    setPastAppointments((prev) => [cancelledApt, ...prev])
-    loadNotifications()
+  const handleCancelled = () => {
+    toast.success("Appointment cancelled")
+    loadAppointments()
   }
 
   const handleMarkRead = async (id: string) => {
     try {
       await api.markNotificationRead(id)
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-      )
-      setUnreadCount((prev) => Math.max(0, prev - 1))
-    } catch (err) {}
+      setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: true } : n))
+      setUnreadCount(Math.max(0, unreadCount - 1))
+    } catch {
+      // silent
+    }
   }
 
   const navItems: NavItem[] = [
     { id: "upcoming", label: "Upcoming Appointments", icon: Calendar, badge: upcomingAppointments.length || undefined },
-    { id: "find-doctors", label: "Find & Book Doctors", icon: Search },
+    { id: "find-doctors", label: "Find Doctors & Book", icon: Search },
     { id: "history", label: "Appointment History", icon: Clock },
-    { id: "documents", label: "Medical Documents", icon: FileText, badge: (medicalRecords.length + prescriptions.length) || undefined },
-    { id: "payments", label: "Billing & Payments", icon: CreditCard },
-    { id: "notifications", label: "Notifications", icon: Bell, badge: unreadCount || undefined },
-    { id: "profile", label: "My Medical Profile", icon: User },
+    { id: "documents", label: "Medical Records & Prescriptions", icon: FileText, badge: medicalRecords.length + prescriptions.length || undefined },
+    { id: "notifications", label: "Notifications", icon: CheckCircle2, badge: unreadCount || undefined },
   ]
 
   const userDisplayName = user ? `${user.firstName} ${user.lastName}` : "Patient"
@@ -256,7 +247,7 @@ export function PatientDashboard() {
   return (
     <DashboardShell
       roleTitle="Patient Portal"
-      roleColor="sky"
+      roleColor="teal"
       userDisplayName={userDisplayName}
       userSubtitle={user?.email || "Authenticated Patient"}
       userAvatar="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"
@@ -269,129 +260,128 @@ export function PatientDashboard() {
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Upcoming Appointments</h1>
-              <p className="text-xs text-slate-500 mt-1">
+              <h1 className="font-editorial-serif text-3xl sm:text-4xl text-[#1e1815] font-normal tracking-tight">
+                Upcoming Appointments
+              </h1>
+              <p className="text-xs text-[#6e6059] mt-1 font-editorial-sans">
                 Real-time booking confirmations from Supabase PostgreSQL.
               </p>
             </div>
-            <Button 
-              variant="teal" 
-              size="sm" 
+            <button 
+              type="button"
               onClick={() => handleOpenBooking()} 
-              className="gap-2 self-start shadow-md shadow-teal-600/20"
+              className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2.5 text-xs font-medium shadow-xs transition-colors cursor-pointer flex items-center gap-2 self-start"
             >
               <Plus className="w-4 h-4" /> Book New Appointment
-            </Button>
+            </button>
           </div>
 
           {loadingAppointments ? (
-            <div className="p-16 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
-              <Loader2 className="w-6 h-6 animate-spin text-teal-600" />
+            <div className="p-16 text-center text-[#8c7e77] text-xs flex flex-col items-center gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-[#cb6440]" />
               <span>Fetching confirmed consultations from database...</span>
             </div>
           ) : upcomingAppointments.length === 0 ? (
-            <Card className="p-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
-              <Calendar className="w-10 h-10 text-teal-600/40 mx-auto mb-3" />
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white">No Upcoming Consultations</h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            <div className="p-12 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl">
+              <Calendar className="w-10 h-10 text-[#cb6440]/40 mx-auto mb-3" />
+              <h3 className="font-bold text-sm text-[#1e1815]">No Upcoming Consultations</h3>
+              <p className="text-xs text-[#6e6059] mt-1 max-w-sm mx-auto">
                 You have no scheduled appointments at this time. Browse our directory of specialist physicians to reserve your slot.
               </p>
-              <Button 
-                variant="teal" 
-                size="sm" 
-                className="mt-4 gap-2 text-xs"
+              <button 
+                type="button"
+                className="mt-4 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2 text-xs font-medium transition-colors cursor-pointer inline-flex items-center gap-2"
                 onClick={() => setActiveTab("find-doctors")}
               >
                 <Search className="w-4 h-4" /> Browse Doctor Directory
-              </Button>
-            </Card>
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               {upcomingAppointments.map((apt) => {
                 const start = new Date(apt.scheduledStart)
                 return (
-                  <Card key={apt.id} className="border-l-4 border-l-teal-500 shadow-sm hover:border-teal-500 transition-all">
-                    <CardContent className="p-5 space-y-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold text-base shrink-0">
-                            <Stethoscope className="w-6 h-6" />
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-mono font-semibold text-teal-600 dark:text-teal-400">
-                              {apt.bookingReference}
-                            </span>
-                            <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                              Dr. {apt.doctor?.profile.firstName} {apt.doctor?.profile.lastName}
-                            </h3>
-                            <p className="text-xs text-slate-500">{apt.doctor?.specialty} • {apt.clinic?.name}</p>
-                          </div>
-                        </div>
-                        <Badge variant={apt.status === "CONFIRMED" ? "teal" : "info"}>
-                          {apt.status}
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs">
-                        <div>
-                          <span className="text-slate-400 block text-[11px]">Date & Time</span>
-                          <span className="font-semibold text-slate-800 dark:text-slate-200 block mt-0.5">
-                            {start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                          </span>
-                          <span className="text-[11px] text-teal-600 font-bold">
-                            {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                  <div key={apt.id} className="bg-white rounded-2xl border border-[#e8e2d8] border-l-4 border-l-[#4a6356] p-5 space-y-4 shadow-2xs hover:border-[#cb6440]/40 transition-all">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-[#4a6356]/10 text-[#4a6356] flex items-center justify-center font-bold text-base shrink-0">
+                          <Stethoscope className="w-6 h-6" />
                         </div>
                         <div>
-                          <span className="text-slate-400 block text-[11px]">Consultation Format</span>
-                          <span className="font-semibold text-slate-800 dark:text-slate-200 block mt-0.5">
-                            {apt.visitType === "VIDEO_VISIT" ? "Telehealth Video" : "In-Clinic Visit"}
+                          <span className="text-[10px] font-mono font-semibold text-[#cb6440]">
+                            {apt.bookingReference}
                           </span>
-                          <span className="text-[11px] text-slate-400">
-                            Fee: ${Number(apt.consultationFee).toFixed(2)} ({apt.paymentMethod === "PAY_AT_CLINIC" ? "Pay at Clinic" : "Pending"})
-                          </span>
+                          <h3 className="font-bold text-sm text-[#1e1815]">
+                            Dr. {apt.doctor?.profile.firstName} {apt.doctor?.profile.lastName}
+                          </h3>
+                          <p className="text-xs text-[#6e6059]">{apt.doctor?.specialty} • {apt.clinic?.name}</p>
                         </div>
                       </div>
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                        apt.status === "CONFIRMED" 
+                          ? "bg-[#4a6356]/15 text-[#4a6356] border border-[#4a6356]/30" 
+                          : "bg-[#cb6440]/15 text-[#cb6440] border border-[#cb6440]/30"
+                      }`}>
+                        {apt.status}
+                      </span>
+                    </div>
 
-                      <div className="flex items-center justify-between text-xs pt-1">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="text-xs gap-1.5 px-2 text-slate-500"
+                    <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#f8f5ee] border border-[#ece6dd] text-xs">
+                      <div>
+                        <span className="text-[#8c7e77] block text-[11px]">Date & Time</span>
+                        <span className="font-semibold text-[#1e1815] block mt-0.5">
+                          {start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                        </span>
+                        <span className="text-[11px] text-[#4a6356] font-bold">
+                          {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[#8c7e77] block text-[11px]">Consultation Format</span>
+                        <span className="font-semibold text-[#1e1815] block mt-0.5">
+                          {apt.visitType === "VIDEO_VISIT" ? "Telehealth Video" : "In-Clinic Visit"}
+                        </span>
+                        <span className="text-[11px] text-[#8c7e77]">
+                          Fee: ${Number(apt.consultationFee).toFixed(2)} ({apt.paymentMethod === "PAY_AT_CLINIC" ? "Pay at Clinic" : "Pending"})
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-[#f2ede4]">
+                      <button 
+                        type="button"
+                        className="text-xs font-medium text-[#6e6059] hover:text-[#1e1815] flex items-center gap-1.5 cursor-pointer"
+                        onClick={() => {
+                          setSelectedAppointment(apt)
+                          setIsDetailsOpen(true)
+                        }}
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Details
+                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          type="button"
+                          className="rounded-full border border-[#dcd3c6] bg-white px-3 py-1 text-xs font-medium text-[#1e1815] hover:border-[#cb6440] transition-colors flex items-center gap-1 cursor-pointer"
                           onClick={() => {
                             setSelectedAppointment(apt)
-                            setIsDetailsOpen(true)
+                            setIsRescheduleOpen(true)
                           }}
                         >
-                          <Eye className="w-3.5 h-3.5" /> Details
-                        </Button>
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-xs gap-1"
-                            onClick={() => {
-                              setSelectedAppointment(apt)
-                              setIsRescheduleOpen(true)
-                            }}
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" /> Reschedule
-                          </Button>
-                          <Button 
-                            variant="danger" 
-                            size="sm" 
-                            className="text-xs gap-1"
-                            onClick={() => {
-                              setSelectedAppointment(apt)
-                              setIsCancelOpen(true)
-                            }}
-                          >
-                            <XCircle className="w-3.5 h-3.5" /> Cancel
-                          </Button>
-                        </div>
+                          <RefreshCw className="w-3.5 h-3.5" /> Reschedule
+                        </button>
+                        <button 
+                          type="button"
+                          className="rounded-full border border-rose-200 bg-rose-50/50 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 transition-colors flex items-center gap-1 cursor-pointer"
+                          onClick={() => {
+                            setSelectedAppointment(apt)
+                            setIsCancelOpen(true)
+                          }}
+                        >
+                          <XCircle className="w-3.5 h-3.5" /> Cancel
+                        </button>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )
               })}
             </div>
@@ -404,37 +394,38 @@ export function PatientDashboard() {
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Find Doctors & Book Slots</h1>
-              <p className="text-xs text-slate-500 mt-1">Live schedule calculation and atomic double-booking protection.</p>
+              <h1 className="font-editorial-serif text-3xl sm:text-4xl text-[#1e1815] font-normal tracking-tight">
+                Find Doctors & Book Slots
+              </h1>
+              <p className="text-xs text-[#6e6059] mt-1">Live schedule calculation and atomic double-booking protection.</p>
             </div>
-            <Button 
-              variant="teal" 
-              size="sm" 
+            <button 
+              type="button"
               onClick={() => handleOpenBooking()} 
-              className="gap-2 self-start"
+              className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2.5 text-xs font-medium shadow-xs transition-colors cursor-pointer flex items-center gap-2 self-start"
             >
               <Plus className="w-4 h-4" /> Start 5-Step Booking
-            </Button>
+            </button>
           </div>
 
           {/* Search Bar & Specialty Filter */}
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-3">
+          <div className="p-4 rounded-2xl bg-white border border-[#e8e2d8] shadow-2xs flex flex-col md:flex-row gap-3">
             <div className="flex-1 relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Search className="w-4 h-4 text-[#8c7e77] absolute left-3 top-3" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && fetchDoctorsAndClinics()}
                 placeholder="Search doctor by name or clinical specialty..."
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full rounded-full border border-[#e4ded5] bg-[#fbf9f5] pl-9 pr-4 py-2 text-xs text-[#1e1815] focus:outline-none focus:border-[#cb6440]"
               />
             </div>
 
             <select
               value={selectedSpecialty}
               onChange={(e) => setSelectedSpecialty(e.target.value)}
-              className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="rounded-full border border-[#e4ded5] bg-white px-4 py-2 text-xs text-[#1e1815] focus:outline-none focus:border-[#cb6440]"
             >
               <option value="all">All Specialties</option>
               <option value="Cardiology">Cardiology</option>
@@ -443,24 +434,28 @@ export function PatientDashboard() {
               <option value="General Medicine">General Medicine</option>
             </select>
 
-            <Button variant="teal" size="sm" onClick={fetchDoctorsAndClinics} className="gap-2">
+            <button 
+              type="button"
+              onClick={fetchDoctorsAndClinics} 
+              className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2 text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors"
+            >
               <Search className="w-3.5 h-3.5" /> Filter
-            </Button>
+            </button>
           </div>
 
           {/* Partner Clinics Banner */}
           {clinics.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Partner Healthcare Clinics</h3>
+              <h3 className="text-xs font-bold text-[#8c7e77] uppercase tracking-wider">Partner Healthcare Clinics</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {clinics.map((clinic) => (
-                  <div key={clinic.id} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 flex items-center justify-center shrink-0">
+                  <div key={clinic.id} className="p-3.5 rounded-xl border border-[#e8e2d8] bg-white flex items-center gap-3 shadow-2xs">
+                    <div className="w-9 h-9 rounded-lg bg-[#4a6356]/10 text-[#4a6356] flex items-center justify-center shrink-0">
                       <Building2 className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-bold text-xs text-slate-900 dark:text-white truncate">{clinic.name}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{clinic.city}, {clinic.state} • {clinic.operatingHours}</p>
+                      <p className="font-bold text-xs text-[#1e1815] truncate">{clinic.name}</p>
+                      <p className="text-[11px] text-[#6e6059] truncate">{clinic.city}, {clinic.state} • {clinic.operatingHours}</p>
                     </div>
                   </div>
                 ))}
@@ -470,133 +465,132 @@ export function PatientDashboard() {
 
           {/* Doctors Grid */}
           {loadingProviders ? (
-            <div className="p-12 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
-              <Loader2 className="w-6 h-6 animate-spin text-teal-600" />
+            <div className="p-12 text-center text-[#8c7e77] text-xs flex flex-col items-center gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-[#cb6440]" />
               <span>Fetching verified healthcare providers...</span>
             </div>
           ) : doctors.length === 0 ? (
-            <div className="p-10 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
-              <Stethoscope className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-              <p className="font-semibold text-xs text-slate-700 dark:text-slate-300">No doctors match this search</p>
-              <p className="text-[11px] text-slate-400 mt-1">Try resetting the specialty or search filter.</p>
+            <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-2xl">
+              <Stethoscope className="w-8 h-8 text-[#8c7e77] mx-auto mb-2" />
+              <p className="font-semibold text-xs text-[#1e1815]">No doctors match this search</p>
+              <p className="text-[11px] text-[#6e6059] mt-1">Try resetting the specialty or search filter.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {doctors.map((doc) => (
-                <Card key={doc.id} className={`p-5 transition-all ${selectedDoctor?.id === doc.id ? "ring-2 ring-teal-500" : "hover:border-teal-500/50"}`}>
+                <div key={doc.id} className={`p-5 bg-white rounded-2xl border transition-all shadow-2xs ${selectedDoctor?.id === doc.id ? "border-[#cb6440] ring-1 ring-[#cb6440]" : "border-[#e8e2d8] hover:border-[#cb6440]/50"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold text-base shrink-0">
+                      <div className="w-12 h-12 rounded-xl bg-[#f5f1e9] text-[#1e1815] flex items-center justify-center font-bold text-base shrink-0 border border-[#e8e2d8]">
                         {doc.profile.firstName.charAt(0)}{doc.profile.lastName.charAt(0)}
                       </div>
                       <div>
-                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                        <h4 className="font-bold text-sm text-[#1e1815]">
                           Dr. {doc.profile.firstName} {doc.profile.lastName}
                         </h4>
-                        <p className="text-xs font-medium text-teal-600 dark:text-teal-400">{doc.specialty}</p>
-                        <p className="text-[11px] text-slate-400">{doc.clinic?.name || "Independent Practitioner"}</p>
+                        <p className="text-xs font-medium text-[#cb6440]">{doc.specialty}</p>
+                        <p className="text-[11px] text-[#6e6059]">{doc.clinic?.name || "Independent Practitioner"}</p>
                       </div>
                     </div>
-                    <Badge variant={doc.licenseVerified ? "teal" : "neutral"} className="text-[10px]">
-                      {doc.licenseVerified ? "Verified MD" : "License Pending Audit"}
-                    </Badge>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                      doc.licenseVerified ? "bg-[#4a6356]/15 text-[#4a6356]" : "bg-[#ede5d9] text-[#6e6059]"
+                    }`}>
+                      {doc.licenseVerified ? "Verified MD" : "Audit Pending"}
+                    </span>
                   </div>
 
                   {doc.bio && (
-                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-3 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-[#6e6059] mt-3 line-clamp-2 leading-relaxed">
                       {doc.bio}
                     </p>
                   )}
 
-                  <div className="flex items-center justify-between text-xs pt-4 mt-3 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between text-xs pt-4 mt-3 border-t border-[#f2ede4]">
                     <div>
-                      <span className="text-slate-400 text-[10px] block">Consultation Fee</span>
-                      <span className="font-bold text-slate-900 dark:text-white">${Number(doc.consultationFee).toFixed(2)}</span>
+                      <span className="text-[#8c7e77] text-[10px] block font-medium">Consultation Fee</span>
+                      <span className="font-bold text-[#1e1815]">${Number(doc.consultationFee).toFixed(2)}</span>
                     </div>
                     <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
+                      <button
+                        type="button"
                         onClick={() => handleInspectSlots(doc)}
-                        className="text-xs"
+                        className="rounded-full border border-[#dcd3c6] bg-white px-3.5 py-1.5 text-xs text-[#1e1815] hover:border-[#cb6440] transition-colors cursor-pointer"
                       >
                         Inspect Slots
-                      </Button>
-                      <Button
-                        variant="teal"
-                        size="sm"
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleOpenBooking(doc)}
-                        className="text-xs font-bold gap-1 shadow-sm"
+                        className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-1.5 text-xs font-semibold gap-1 inline-flex items-center shadow-xs cursor-pointer transition-colors"
                       >
                         Book Now <ChevronRight className="w-3.5 h-3.5" />
-                      </Button>
+                      </button>
                     </div>
                   </div>
-                </Card>
+                </div>
               ))}
             </div>
           )}
 
           {/* Live Availability Inspector Panel */}
           {selectedDoctor && (
-            <Card className="p-6 border-teal-500 bg-slate-50/50 dark:bg-slate-900/50">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+            <div className="p-6 rounded-2xl border border-[#cb6440]/30 bg-white shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#ece6dd]">
                 <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  <h3 className="font-bold text-sm text-[#1e1815]">
                     Live Booking Slots: Dr. {selectedDoctor.profile.firstName} {selectedDoctor.profile.lastName}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-[#6e6059] mt-0.5">
                     {selectedDoctor.specialty} • Consultation Duration: 30 mins
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500 font-medium">Select Date:</span>
+                  <span className="text-xs text-[#6e6059] font-medium">Select Date:</span>
                   <input
                     type="date"
                     value={selectedDate}
                     min={new Date().toISOString().split("T")[0]}
                     onChange={(e) => handleDateChange(e.target.value)}
-                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="rounded-full border border-[#e4ded5] bg-[#fbf9f5] px-3.5 py-1.5 text-xs font-semibold text-[#1e1815] focus:outline-none focus:border-[#cb6440]"
                   />
-                  <Button 
-                    variant="teal" 
-                    size="sm" 
+                  <button 
+                    type="button"
                     onClick={() => handleOpenBooking(selectedDoctor)}
-                    className="text-xs font-bold gap-1 ml-2"
+                    className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-1.5 text-xs font-medium cursor-pointer transition-colors ml-2"
                   >
                     Book This Doctor
-                  </Button>
+                  </button>
                 </div>
               </div>
 
               {loadingSlots ? (
-                <div className="p-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
+                <div className="p-8 text-center text-xs text-[#8c7e77] flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#cb6440]" />
                   <span>Calculating real slot availability against working hours and breaks...</span>
                 </div>
               ) : availability?.status === "ON_LEAVE" ? (
                 <div className="p-6 text-center text-xs">
-                  <Badge variant="danger" className="mb-2">Doctor On Leave</Badge>
-                  <p className="font-semibold text-slate-700 dark:text-slate-300">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 mb-2 inline-block">Doctor On Leave</span>
+                  <p className="font-semibold text-[#1e1815]">
                     Dr. {selectedDoctor.profile.firstName} is unavailable on {selectedDate}.
                   </p>
-                  <p className="text-slate-400 text-[11px] mt-1">{availability.leaveReason || "Scheduled Leave"}</p>
+                  <p className="text-[#8c7e77] text-[11px] mt-1">{availability.leaveReason || "Scheduled Leave"}</p>
                 </div>
               ) : availability?.status === "OFF_DUTY" ? (
                 <div className="p-6 text-center text-xs">
-                  <Badge variant="neutral" className="mb-2">No Scheduled Shifts</Badge>
-                  <p className="font-semibold text-slate-700 dark:text-slate-300">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#ede5d9] text-[#6e6059] mb-2 inline-block">No Scheduled Shifts</span>
+                  <p className="font-semibold text-[#1e1815]">
                     The doctor does not have working hours configured for this day of the week.
                   </p>
-                  <p className="text-slate-400 text-[11px] mt-1">Please select another date on the calendar.</p>
+                  <p className="text-[#8c7e77] text-[11px] mt-1">Please select another date on the calendar.</p>
                 </div>
               ) : (
-                <div className="mt-4 space-y-3">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">
-                      Found <strong className="text-emerald-600">{availability?.availableSlotsCount} available</strong> of {availability?.totalSlots} total generated slots
+                    <span className="text-[#6e6059]">
+                      Found <strong className="text-[#4a6356]">{availability?.availableSlotsCount} available</strong> of {availability?.totalSlots} total generated slots
                     </span>
-                    <span className="text-[11px] text-slate-400">Timezone: UTC</span>
+                    <span className="text-[11px] text-[#8c7e77]">Timezone: UTC</span>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
@@ -610,8 +604,8 @@ export function PatientDashboard() {
                         }}
                         className={`p-2.5 rounded-xl border text-center transition-all ${
                           slot.available
-                            ? "border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:border-emerald-500 cursor-pointer"
-                            : "border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 cursor-not-allowed opacity-60"
+                            ? "border-[#4a6356]/40 bg-[#4a6356]/10 text-[#4a6356] hover:bg-[#4a6356] hover:text-white cursor-pointer"
+                            : "border-[#e8e2d8] bg-[#f8f5ee] text-[#8c7e77] cursor-not-allowed opacity-60"
                         }`}
                       >
                         <span className="font-bold text-xs block">{slot.time}</span>
@@ -623,7 +617,7 @@ export function PatientDashboard() {
                   </div>
                 </div>
               )}
-            </Card>
+            </div>
           )}
         </div>
       )}
@@ -632,50 +626,53 @@ export function PatientDashboard() {
       {activeTab === "history" && (
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Appointment History</h1>
-            <p className="text-xs text-slate-500 mt-1">Past completed and cancelled medical consultations in Supabase.</p>
+            <h1 className="font-editorial-serif text-3xl sm:text-4xl text-[#1e1815] font-normal tracking-tight">
+              Appointment History
+            </h1>
+            <p className="text-xs text-[#6e6059] mt-1">Past completed and cancelled medical consultations in Supabase.</p>
           </div>
 
-          <Card>
+          <div className="bg-white rounded-2xl border border-[#e8e2d8] overflow-hidden shadow-2xs">
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
+                <thead className="bg-[#f8f5ee] text-[#6e6059] font-semibold border-b border-[#ece6dd]">
                   <tr>
                     <th className="p-4">Reference</th>
-                    <th className="p-4">Doctor</th>
+                    <th className="p-4">Physician</th>
                     <th className="p-4">Date & Time</th>
                     <th className="p-4">Facility</th>
                     <th className="p-4">Status</th>
                     <th className="p-4">Fee</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-[#f2ede4]">
                   {pastAppointments.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                      <td colSpan={6} className="p-8 text-center text-[#8c7e77] italic">
                         No previous appointment history found.
                       </td>
                     </tr>
                   ) : (
                     pastAppointments.map((apt) => (
-                      <tr key={apt.id}>
-                        <td className="p-4 font-mono font-bold text-teal-600">{apt.bookingReference}</td>
-                        <td className="p-4 font-bold text-slate-900 dark:text-white">
+                      <tr key={apt.id} className="hover:bg-[#fbf9f5]">
+                        <td className="p-4 font-mono font-bold text-[#cb6440]">{apt.bookingReference}</td>
+                        <td className="p-4 font-bold text-[#1e1815]">
                           Dr. {apt.doctor?.profile.firstName} {apt.doctor?.profile.lastName}
                         </td>
-                        <td className="p-4 text-slate-500">
+                        <td className="p-4 text-[#6e6059]">
                           {new Date(apt.scheduledStart).toLocaleDateString()} at {new Date(apt.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </td>
-                        <td className="p-4 text-slate-600 dark:text-slate-300">{apt.clinic?.name}</td>
+                        <td className="p-4 text-[#4a3e39]">{apt.clinic?.name}</td>
                         <td className="p-4">
-                          <Badge variant={
-                            apt.status === "COMPLETED" ? "teal" :
-                            apt.status === "CANCELLED" ? "danger" : "neutral"
-                          }>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                            apt.status === "COMPLETED" 
+                              ? "bg-[#4a6356]/15 text-[#4a6356]" 
+                              : "bg-[#ede5d9] text-[#6e6059]"
+                          }`}>
                             {apt.status}
-                          </Badge>
+                          </span>
                         </td>
-                        <td className="p-4 font-semibold text-slate-900 dark:text-white">
+                        <td className="p-4 font-semibold text-[#1e1815]">
                           ${Number(apt.consultationFee).toFixed(2)}
                         </td>
                       </tr>
@@ -684,7 +681,7 @@ export function PatientDashboard() {
                 </tbody>
               </table>
             </div>
-          </Card>
+          </div>
         </div>
       )}
 
@@ -694,45 +691,44 @@ export function PatientDashboard() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Medical Records & Prescriptions</h1>
-                <Badge variant="teal" className="flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3 text-emerald-500" />
+              <div className="flex items-center gap-3">
+                <h1 className="font-editorial-serif text-3xl sm:text-4xl text-[#1e1815] font-normal tracking-tight">
+                  Medical Records & Prescriptions
+                </h1>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#4a6356]/15 text-[#4a6356] border border-[#4a6356]/30">
+                  <ShieldCheck className="w-3.5 h-3.5" />
                   Encrypted Vault
-                </Badge>
+                </span>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-[#6e6059] mt-1">
                 Upload reports, view lab tests, and access official doctor-issued digital prescriptions.
               </p>
             </div>
-            <div className="flex items-center gap-2.5 self-start">
-              <Button
-                variant="outline"
-                size="sm"
+            <div className="flex items-center gap-2.5 self-start flex-wrap">
+              <button
+                type="button"
                 onClick={() => setIsPatientAiOpen(true)}
-                className="gap-2 text-xs border-indigo-500/40 text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/20"
+                className="rounded-full border border-[#8c6b3e]/40 bg-[#fbf5ee] text-[#8c6b3e] hover:bg-[#f5ece0] px-4 py-2 text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors"
               >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                AI Health Assistant
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
+                <Sparkles className="w-3.5 h-3.5 text-[#8c6b3e]" />
+                AI Health Explainer
+              </button>
+              <button
+                type="button"
                 onClick={() => setIsDoctorAccessOpen(true)}
-                className="gap-2 text-xs border-slate-300 dark:border-slate-700"
+                className="rounded-full border border-[#dcd3c6] bg-white text-[#1e1815] hover:border-[#cb6440] px-4 py-2 text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors"
               >
-                <Key className="w-3.5 h-3.5 text-amber-500" />
+                <Key className="w-3.5 h-3.5 text-[#cb6440]" />
                 Doctor Permissions
-              </Button>
-              <Button
-                variant="teal"
-                size="sm"
+              </button>
+              <button
+                type="button"
                 onClick={() => setIsUploadRecordOpen(true)}
-                className="gap-2 text-xs shadow-md shadow-teal-600/20"
+                className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2 text-xs font-medium flex items-center gap-2 shadow-xs cursor-pointer transition-colors"
               >
                 <Upload className="w-3.5 h-3.5" />
                 Upload Document
-              </Button>
+              </button>
             </div>
           </div>
 
@@ -746,8 +742,8 @@ export function PatientDashboard() {
           {/* SECTION 1: Patient Medical Documents */}
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-sky-500" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-[#1e1815] flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#cb6440]" />
                 <span>Uploaded Medical Records ({medicalRecords.length})</span>
               </h2>
 
@@ -757,10 +753,10 @@ export function PatientDashboard() {
                   <button
                     key={cat}
                     onClick={() => setRecordCategoryFilter(cat)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition ${
+                    className={`px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition cursor-pointer ${
                       recordCategoryFilter === cat
-                        ? "bg-sky-600 text-white font-semibold"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750"
+                        ? "bg-[#cb6440] text-white font-semibold"
+                        : "bg-white border border-[#e8e2d8] text-[#6e6059] hover:bg-[#f8f5ee]"
                     }`}
                   >
                     {cat === "ALL" ? "All Categories" : cat.replace(/_/g, " ")}
@@ -770,73 +766,72 @@ export function PatientDashboard() {
             </div>
 
             {loadingRecords ? (
-              <div className="py-12 text-center text-xs text-slate-400">Loading your medical records vault...</div>
+              <div className="py-12 text-center text-xs text-[#8c7e77]">Loading your medical records vault...</div>
             ) : medicalRecords.length === 0 ? (
-              <Card className="p-8 text-center border-dashed">
+              <div className="p-8 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-2xl">
                 <div className="max-w-md mx-auto space-y-3">
-                  <div className="p-3.5 w-fit mx-auto rounded-2xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                  <div className="p-3.5 w-fit mx-auto rounded-2xl bg-[#4a6356]/10 text-[#4a6356]">
                     <FileText className="w-8 h-8" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">Your Medical Vault is Empty</h3>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <h3 className="text-sm font-bold text-[#1e1815]">Your Medical Vault is Empty</h3>
+                    <p className="text-xs text-[#6e6059] mt-1">
                       Upload lab tests, doctor prescriptions, or imaging reports. Documents are stored in an encrypted private bucket and accessible only to you and authorized doctors.
                     </p>
                   </div>
-                  <Button
-                    variant="teal"
-                    size="sm"
+                  <button
+                    type="button"
                     onClick={() => setIsUploadRecordOpen(true)}
-                    className="gap-2 text-xs"
+                    className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2 text-xs font-medium cursor-pointer transition-colors inline-flex items-center gap-2"
                   >
                     <Upload className="w-3.5 h-3.5" />
                     Upload Your First Document
-                  </Button>
+                  </button>
                 </div>
-              </Card>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {medicalRecords
                   .filter((rec) => recordCategoryFilter === "ALL" || rec.category === recordCategoryFilter)
                   .map((rec) => (
-                    <Card
+                    <div
                       key={rec.id}
-                      className="p-4 flex flex-col justify-between hover:border-sky-500/40 transition group"
+                      className="bg-white rounded-2xl border border-[#e8e2d8] p-4.5 flex flex-col justify-between hover:border-[#cb6440]/50 transition-all shadow-2xs group"
                     >
                       <div className="space-y-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2.5">
-                            <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/80 text-sky-600 dark:text-sky-400 border border-sky-500/20 shrink-0">
+                            <div className="p-2.5 rounded-xl bg-[#f8f5ee] text-[#cb6440] border border-[#ece6dd] shrink-0">
                               <FileText className="w-5 h-5" />
                             </div>
                             <div className="truncate">
-                              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              <h4 className="text-xs font-bold text-[#1e1815] truncate">
                                 {rec.title}
                               </h4>
-                              <p className="text-[10px] text-slate-400 truncate">{rec.fileName}</p>
+                              <p className="text-[10px] text-[#8c7e77] truncate">{rec.fileName}</p>
                             </div>
                           </div>
-                          <Badge variant="teal" className="text-[10px] shrink-0">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-[#f5f1e9] text-[#6e6059] shrink-0">
                             {rec.category.replace(/_/g, " ")}
-                          </Badge>
+                          </span>
                         </div>
 
                         {rec.description && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">
+                          <p className="text-[11px] text-[#6e6059] line-clamp-2">
                             {rec.description}
                           </p>
                         )}
 
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center justify-between text-[10px] text-[#8c7e77] pt-1 border-t border-[#f2ede4]">
                           <span>{(rec.fileSize / (1024 * 1024)).toFixed(2)} MB • {new Date(rec.createdAt).toLocaleDateString()}</span>
-                          <span className="text-emerald-500 font-semibold flex items-center gap-1">
+                          <span className="text-[#4a6356] font-semibold flex items-center gap-1">
                             <ShieldCheck className="w-3 h-3" />
                             Clean
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-[#f2ede4]">
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
@@ -844,9 +839,9 @@ export function PatientDashboard() {
                               setViewingRecord(rec)
                               setIsRecordViewerOpen(true)
                             }}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/40 transition"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-[#1e1815] hover:bg-[#f8f5ee] border border-[#e8e2d8] transition cursor-pointer"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Eye className="w-3.5 h-3.5 text-[#8c7e77]" />
                             <span>Preview</span>
                           </button>
                           <button
@@ -855,73 +850,73 @@ export function PatientDashboard() {
                               setAnalyzingRecord(rec)
                               setIsLabAnalyzerOpen(true)
                             }}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-[#cb6440] hover:bg-[#fbf5f2] border border-[#cb6440]/30 transition cursor-pointer"
                           >
-                            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                            <Sparkles className="w-3.5 h-3.5 text-[#cb6440]" />
                             <span>AI Analyze</span>
                           </button>
                         </div>
                         <button
                           type="button"
                           onClick={() => handleDeleteRecord(rec.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition"
+                          className="p-1.5 text-[#8c7e77] hover:text-rose-600 rounded-full transition cursor-pointer"
                           title="Delete Medical Record"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                    </Card>
+                    </div>
                   ))}
               </div>
             )}
           </div>
 
           {/* SECTION 2: Official Physician Digital Prescriptions */}
-          <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
-              <Pill className="w-4 h-4 text-purple-500" />
+          <div className="space-y-4 pt-4 border-t border-[#ece6dd]">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-[#1e1815] flex items-center gap-2">
+              <Pill className="w-4 h-4 text-[#4a6356]" />
               <span>Doctor Prescriptions ({prescriptions.length})</span>
             </h2>
 
             {prescriptions.length === 0 ? (
-              <Card className="p-6 text-center text-xs text-slate-500 italic">
+              <div className="p-6 text-center text-xs text-[#8c7e77] italic bg-white rounded-2xl border border-[#e8e2d8]">
                 No digital prescriptions issued yet. Consultations with licensed physicians will appear here with official PDF records.
-              </Card>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {prescriptions.map((rx) => (
-                  <Card key={rx.id} className="p-4 flex flex-col justify-between space-y-3 border-purple-500/20 hover:border-purple-500/40 transition">
+                  <div key={rx.id} className="bg-white rounded-2xl border border-[#e8e2d8] p-5 flex flex-col justify-between space-y-3 shadow-2xs hover:border-[#4a6356]/40 transition">
                     <div className="space-y-2">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2.5">
-                          <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                          <div className="p-2.5 rounded-xl bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/20">
                             <Pill className="w-5 h-5" />
                           </div>
                           <div>
-                            <span className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400">
+                            <span className="text-[10px] font-mono font-bold text-[#cb6440]">
                               {rx.prescriptionNumber}
                             </span>
-                            <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                            <h4 className="text-xs font-bold text-[#1e1815]">
                               Dr. {rx.doctor?.profile.firstName} {rx.doctor?.profile.lastName}
                             </h4>
                           </div>
                         </div>
-                        <Badge variant="teal" className="text-[10px]">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#f8f5ee] text-[#6e6059]">
                           {new Date(rx.issuedAt).toLocaleDateString()}
-                        </Badge>
+                        </span>
                       </div>
 
                       {rx.diagnosis && (
-                        <p className="text-xs text-slate-600 dark:text-slate-300">
-                          <span className="font-semibold text-slate-400">Diagnosis:</span> {rx.diagnosis}
+                        <p className="text-xs text-[#4a3e39]">
+                          <span className="font-semibold text-[#8c7e77]">Diagnosis:</span> {rx.diagnosis}
                         </p>
                       )}
 
-                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-[11px] text-slate-500 space-y-1">
-                        <p className="font-semibold text-slate-700 dark:text-slate-300">Medications ({rx.items.length}):</p>
+                      <div className="p-3 rounded-xl bg-[#f8f5ee] border border-[#ece6dd] text-[11px] text-[#6e6059] space-y-1">
+                        <p className="font-semibold text-[#1e1815]">Medications ({rx.items.length}):</p>
                         <div className="flex flex-wrap gap-1.5">
                           {rx.items.map((item, i) => (
-                            <span key={i} className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[10px]">
+                            <span key={i} className="px-2 py-0.5 rounded-md bg-white border border-[#e4ded5] text-[#1e1815] text-[10px]">
                               {item.medicineName} ({item.dosage})
                             </span>
                           ))}
@@ -929,64 +924,27 @@ export function PatientDashboard() {
                       </div>
                     </div>
 
-                    <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
-                      <span className="text-[10px] text-slate-400">
-                        {rx.clinic?.name || "MediSlot Clinic Network"}
+                    <div className="pt-2 flex items-center justify-between border-t border-[#f2ede4]">
+                      <span className="text-[10px] text-[#8c7e77]">
+                        {rx.clinic?.name || "MediSlot Hospital Network"}
                       </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
+                      <button
+                        type="button"
                         onClick={() => {
                           setViewingPrescription(rx)
                           setIsPrescriptionViewerOpen(true)
                         }}
-                        className="text-xs text-purple-600 dark:text-purple-400 border-purple-500/30 gap-1.5"
+                        className="rounded-full border border-[#dcd3c6] bg-white px-4 py-1.5 text-xs text-[#1e1815] hover:border-[#cb6440] transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
-                        <FileText className="w-3.5 h-3.5" />
+                        <FileText className="w-3.5 h-3.5 text-[#cb6440]" />
                         <span>View Official PDF</span>
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Tab: Billing & Payments */}
-      {activeTab === "payments" && (
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Billing & Payments</h1>
-            <p className="text-xs text-slate-500 mt-1">Transaction receipts and payment breakdown.</p>
-          </div>
-
-          <Card>
-            <div className="p-6">
-              <h3 className="font-bold text-sm mb-4">Payment Invoices</h3>
-              <div className="space-y-3">
-                {upcomingAppointments.concat(pastAppointments).slice(0, 4).map((apt) => (
-                  <div key={apt.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs">
-                    <div>
-                      <p className="font-semibold text-slate-900 dark:text-white">
-                        Consultation with Dr. {apt.doctor?.profile.firstName} {apt.doctor?.profile.lastName}
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        Reference: {apt.bookingReference} • {apt.paymentMethod === "PAY_AT_CLINIC" ? "Pay at Clinic Reception" : "Online Checkout"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-slate-900 dark:text-white">${Number(apt.consultationFee).toFixed(2)}</p>
-                      <span className={`text-[10px] font-semibold ${apt.paymentStatus === "PAID" ? "text-emerald-600" : "text-amber-500"}`}>
-                        {apt.paymentStatus}
-                      </span>
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          </Card>
+            )}
+          </div>
         </div>
       )}
 
@@ -995,84 +953,54 @@ export function PatientDashboard() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Patient Notifications</h1>
-              <p className="text-xs text-slate-500 mt-1">Real-time alerts stored in Supabase PostgreSQL.</p>
+              <h1 className="font-editorial-serif text-3xl sm:text-4xl text-[#1e1815] font-normal tracking-tight">
+                Patient Notifications
+              </h1>
+              <p className="text-xs text-[#6e6059] mt-1">Real-time alerts stored in Supabase PostgreSQL.</p>
             </div>
             {unreadCount > 0 && (
-              <Badge variant="teal">{unreadCount} Unread</Badge>
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-[#cb6440]/15 text-[#cb6440]">
+                {unreadCount} Unread
+              </span>
             )}
           </div>
 
           <div className="space-y-3">
             {notifications.length === 0 ? (
-              <p className="text-xs text-slate-400 italic py-4">No notifications at this time.</p>
+              <p className="text-xs text-[#8c7e77] italic py-4">No notifications at this time.</p>
             ) : (
               notifications.map((n) => (
                 <div 
                   key={n.id} 
-                  className={`p-4 rounded-xl border flex items-start justify-between gap-3 transition-all ${
+                  className={`p-4.5 rounded-2xl border flex items-start justify-between gap-3 transition-all ${
                     n.isRead 
-                      ? "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" 
-                      : "border-teal-500/40 bg-teal-50/30 dark:bg-teal-950/20"
+                      ? "border-[#e8e2d8] bg-white" 
+                      : "border-[#cb6440]/30 bg-[#fbf5f2]"
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <CheckCircle2 className={`w-5 h-5 shrink-0 mt-0.5 ${n.isRead ? "text-slate-400" : "text-teal-600"}`} />
+                    <CheckCircle2 className={`w-5 h-5 shrink-0 mt-0.5 ${n.isRead ? "text-[#8c7e77]" : "text-[#cb6440]"}`} />
                     <div>
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-white">{n.title}</h4>
-                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">{n.message}</p>
-                      <span className="text-[10px] text-slate-400 mt-1 block">
+                      <h4 className="text-xs font-bold text-[#1e1815]">{n.title}</h4>
+                      <p className="text-xs text-[#6e6059] mt-0.5 leading-relaxed">{n.message}</p>
+                      <span className="text-[10px] text-[#8c7e77] mt-1 block">
                         {new Date(n.createdAt).toLocaleDateString()} at {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                   </div>
                   {!n.isRead && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-[11px] h-7 gap-1"
+                    <button 
+                      type="button"
+                      className="text-[11px] text-[#cb6440] hover:underline flex items-center gap-1 cursor-pointer"
                       onClick={() => handleMarkRead(n.id)}
                     >
-                      <Check className="w-3.5 h-3.5 text-teal-600" /> Mark Read
-                    </Button>
+                      <Check className="w-3.5 h-3.5" /> Mark Read
+                    </button>
                   )}
                 </div>
               ))
             )}
           </div>
-        </div>
-      )}
-
-      {/* Tab: Profile */}
-      {activeTab === "profile" && (
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Patient Medical Profile</h1>
-            <p className="text-xs text-slate-500 mt-1">Manage personal health metrics and emergency contacts.</p>
-          </div>
-
-          <Card className="p-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div>
-                <label className="text-slate-400 block mb-1">Full Name</label>
-                <p className="font-semibold text-slate-800 dark:text-slate-200">
-                  {user?.firstName} {user?.lastName}
-                </p>
-              </div>
-              <div>
-                <label className="text-slate-400 block mb-1">Contact Email</label>
-                <p className="font-semibold text-slate-800 dark:text-slate-200">{user?.email}</p>
-              </div>
-              <div>
-                <label className="text-slate-400 block mb-1">Assigned Role</label>
-                <Badge variant="teal">{user?.role}</Badge>
-              </div>
-              <div>
-                <label className="text-slate-400 block mb-1">Blood Group</label>
-                <p className="font-semibold text-slate-800 dark:text-slate-200">O Positive (O+)</p>
-              </div>
-            </div>
-          </Card>
         </div>
       )}
 

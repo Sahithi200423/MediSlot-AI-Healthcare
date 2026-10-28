@@ -25,6 +25,7 @@ export interface Clinic {
   operatingHours: string
   timezone: string
   isVerified: boolean
+  createdAt?: string
   _count?: { doctors: number; appointments: number }
 }
 
@@ -939,6 +940,63 @@ export const api = {
     if (!res.ok) throw new Error(json.error || "Failed to fetch patient AI analyses")
     return json.data || []
   },
+
+  // ================= PLATFORM ADMIN APIS =================
+
+  async getPlatformStats(): Promise<{
+    totalClinics: number
+    totalDoctors: number
+    totalPatients: number
+    totalAppointments: number
+    totalAuditLogs: number
+    verifiedClinicsCount: number
+    recentAppointments: Appointment[]
+  }> {
+    const res = await fetch(`${API_BASE}/admin/stats`, {
+      headers: getAuthHeaders(),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error?.message || "Failed to fetch platform stats")
+    return json.data
+  },
+
+  async getPlatformAuditLogs(resourceTable?: string, limit = 50): Promise<{ logs: any[]; total: number }> {
+    const query = new URLSearchParams()
+    if (resourceTable && resourceTable !== "ALL") query.append("resourceTable", resourceTable)
+    query.append("limit", limit.toString())
+
+    const res = await fetch(`${API_BASE}/admin/audit-logs?${query.toString()}`, {
+      headers: getAuthHeaders(),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error?.message || "Failed to fetch audit logs")
+    return json.data
+  },
+
+  async getPlatformUsers(role?: string, search?: string): Promise<{ users: any[]; total: number }> {
+    const query = new URLSearchParams()
+    if (role && role !== "ALL") query.append("role", role)
+    if (search) query.append("search", search)
+
+    const res = await fetch(`${API_BASE}/admin/users?${query.toString()}`, {
+      headers: getAuthHeaders(),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error?.message || "Failed to fetch platform users")
+    return json.data
+  },
+
+  async verifyClinic(clinicId: string, isVerified: boolean): Promise<Clinic> {
+    const res = await fetch(`${API_BASE}/admin/clinics/${clinicId}/verification`, {
+      method: "PATCH",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ isVerified }),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error?.message || "Failed to update clinic verification")
+    return json.data?.clinic
+  },
 }
+
 
 

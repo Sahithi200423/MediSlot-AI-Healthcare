@@ -100,7 +100,7 @@ export const UploadRecordModal: React.FC<UploadRecordModalProps> = ({
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-white">Upload Medical Record</h3>
-                <p className="text-xs text-slate-400">Encrypted and privately stored with strict HIPAA-grade isolation</p>
+                <p className="text-xs text-slate-400">Encrypted and stored in private healthcare object storage with strict tenant isolation</p>
               </div>
             </div>
             <button

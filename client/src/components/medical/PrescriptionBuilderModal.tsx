@@ -156,7 +156,7 @@ export const PrescriptionBuilderModal: React.FC<PrescriptionBuilderModalProps> =
               <div>
                 <h4 className="text-lg font-bold text-white">Digital Prescription Generated!</h4>
                 <p className="text-xs text-slate-400 mt-1">Prescription ID: <span className="text-sky-400 font-mono font-semibold">{createdPrescription.prescriptionNumber}</span></p>
-                <p className="text-xs text-slate-400 mt-0.5">Stored securely in private medical vault with cryptographic watermark.</p>
+                <p className="text-xs text-slate-400 mt-0.5">Stored securely in private medical records with authenticated clinician signature.</p>
               </div>
 
               {downloadUrl && (

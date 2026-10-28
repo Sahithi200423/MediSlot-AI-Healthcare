@@ -14,7 +14,7 @@ export function Footer() {
               <Shield className="w-4 h-4" />
             </div>
             <div>
-              <p className="font-bold text-[#2a201e] dark:text-[#fbf9f5] uppercase tracking-wider text-[11px]">HIPAA Architecture</p>
+              <p className="font-bold text-[#2a201e] dark:text-[#fbf9f5] uppercase tracking-wider text-[11px]">Healthcare Security</p>
               <p className="text-[11px] text-[#8b7566] dark:text-[#c4b5a8] mt-0.5">Encrypted health record storage & RLS isolation</p>
             </div>
           </div>
@@ -25,7 +25,7 @@ export function Footer() {
             </div>
             <div>
               <p className="font-bold text-[#2a201e] dark:text-[#fbf9f5] uppercase tracking-wider text-[11px]">Verified Faculty</p>
-              <p className="text-[11px] text-[#8b7566] dark:text-[#c4b5a8] mt-0.5">State-licensed clinicians & accredited pavilions</p>
+              <p className="text-[11px] text-[#8b7566] dark:text-[#c4b5a8] mt-0.5">Licensed clinicians & verified facilities</p>
             </div>
           </div>
 
@@ -44,8 +44,8 @@ export function Footer() {
               <Lock className="w-4 h-4" />
             </div>
             <div>
-              <p className="font-bold text-[#2a201e] dark:text-[#fbf9f5] uppercase tracking-wider text-[11px]">Immutable Audit Trail</p>
-              <p className="text-[11px] text-[#8b7566] dark:text-[#c4b5a8] mt-0.5">Cryptographic log of all patient record views</p>
+              <p className="font-bold text-[#2a201e] dark:text-[#fbf9f5] uppercase tracking-wider text-[11px]">Security Audit Trail</p>
+              <p className="text-[11px] text-[#8b7566] dark:text-[#c4b5a8] mt-0.5">Comprehensive log of patient record accesses</p>
             </div>
           </div>
         </div>

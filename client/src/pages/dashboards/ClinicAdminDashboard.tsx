@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react"
 import { 
-  Building2, Users, Calendar, CreditCard, BarChart3, 
-  Settings, Stethoscope, FileSpreadsheet, Plus, TrendingUp,
-  Mail, ShieldCheck, Copy, Check
+  Building2, Users, Calendar, BarChart3, 
+  Settings, Stethoscope, Clock, Plus,
+  ShieldCheck, Copy, Check, Filter, Search,
+  Phone, MapPin, CheckCircle2, AlertCircle, RefreshCw
 } from "lucide-react"
 import { toast } from "sonner"
 import { DashboardShell, type NavItem } from "@/components/layout/DashboardShell"
-import { Card } from "@/components/ui/Card"
-import { Button } from "@/components/ui/Button"
-import { Badge } from "@/components/ui/Badge"
 import { useAuth } from "@/context/AuthContext"
 import { api, type Clinic, type Appointment } from "@/lib/api"
 
@@ -22,14 +20,16 @@ export function ClinicAdminDashboard() {
   const [loadingAppointments, setLoadingAppointments] = useState(false)
   const [appointmentDoctorFilter, setAppointmentDoctorFilter] = useState<string>("ALL")
   const [appointmentStatusFilter, setAppointmentStatusFilter] = useState<string>("ALL")
+  const [appointmentSearch, setAppointmentSearch] = useState<string>("")
+  
   const [staffData, setStaffData] = useState<{
     doctors: any[]
-    staff: any[]
-    pendingInvitations: any[]
+    memberships: any[]
+    invitations: any[]
   }>({
     doctors: [],
-    staff: [],
-    pendingInvitations: [],
+    memberships: [],
+    invitations: [],
   })
 
   // Create Clinic Form State
@@ -67,18 +67,21 @@ export function ClinicAdminDashboard() {
   const [lastInviteToken, setLastInviteToken] = useState<string | null>(null)
   const [hasCopiedToken, setHasCopiedToken] = useState(false)
 
+  // Appointment Details Modal
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+
   const navItems: NavItem[] = [
     { id: "overview", label: "Clinic Overview", icon: Building2 },
-    { id: "doctors", label: "Doctors & Providers", icon: Stethoscope, badge: staffData.doctors.length },
-    { id: "staff", label: "Clinic Staff & Invitations", icon: Users, badge: staffData.staff.length + staffData.pendingInvitations.length },
-    { id: "appointments", label: "Master Appointments", icon: Calendar, badge: 24 },
-    { id: "payments", label: "Revenue & Billing", icon: CreditCard },
-    { id: "analytics", label: "Operational Analytics", icon: BarChart3 },
-    { id: "reports", label: "Clinical Reports", icon: FileSpreadsheet },
+    { id: "queue", label: "Consultation Queue", icon: Clock, badge: clinicAppointments.filter(a => a.status === "IN_PROGRESS" || a.status === "CONFIRMED").length || undefined },
+    { id: "appointments", label: "Master Appointments", icon: Calendar, badge: clinicAppointments.length || undefined },
+    { id: "doctors", label: "Doctors & Providers", icon: Stethoscope, badge: staffData.doctors.length || undefined },
+    { id: "patients", label: "Patient Directory", icon: Users },
+    { id: "staff", label: "Staff & Invitations", icon: Users, badge: staffData.invitations.length || undefined },
+    { id: "hours", label: "Hours & Availability", icon: Clock },
     { id: "settings", label: "Clinic Settings", icon: Settings },
   ]
 
-  // Load Clinic Appointments from Live Supabase
+  // Load Clinic Appointments from Live Database
   const loadClinicAppointments = async (clinicId: string) => {
     try {
       setLoadingAppointments(true)
@@ -95,21 +98,25 @@ export function ClinicAdminDashboard() {
   const handleUpdateClinicAppointmentStatus = async (appointmentId: string, status: string) => {
     try {
       await api.updateAppointmentStatus(appointmentId, status)
-      toast.success(`Appointment marked as ${status.replace("_", " ")}`)
+      toast.success(`Appointment status updated to ${status.replace("_", " ")}`)
       if (selectedClinic) await loadClinicAppointments(selectedClinic.id)
+      if (selectedAppointment && selectedAppointment.id === appointmentId) {
+        setSelectedAppointment(prev => prev ? { ...prev, status: status as any } : null)
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to update appointment status")
     }
   }
 
-  // Fetch Clinics & Staff from Live Supabase
+  // Fetch Clinics & Staff from Database
   const loadClinicData = async () => {
     try {
       setLoading(true)
       const list = await api.getClinics()
       setClinics(list)
       if (list.length > 0) {
-        const active = list[0]
+        const preferred = list.find(c => c.id === "bf27f9e6-5410-4dd7-8332-26493b0d1127") || list[0]
+        const active = preferred
         setSelectedClinic(active)
         setSettingsForm({
           name: active.name,
@@ -118,7 +125,7 @@ export function ClinicAdminDashboard() {
           address: active.address,
           city: active.city,
           state: active.state,
-          operatingHours: active.operatingHours || "09:00 - 17:00",
+          operatingHours: active.operatingHours || "08:00 - 18:00",
           timezone: active.timezone || "America/New_York",
         })
 
@@ -130,8 +137,8 @@ export function ClinicAdminDashboard() {
         if (staffRes) {
           setStaffData({
             doctors: staffRes.doctors || [],
-            staff: staffRes.staff || [],
-            pendingInvitations: staffRes.pendingInvitations || [],
+            memberships: staffRes.memberships || [],
+            invitations: staffRes.invitations || [],
           })
         }
       }
@@ -146,16 +153,40 @@ export function ClinicAdminDashboard() {
     loadClinicData()
   }, [])
 
+  // Handle Switch Selected Clinic
+  const handleSelectClinic = async (clinic: Clinic) => {
+    setSelectedClinic(clinic)
+    setSettingsForm({
+      name: clinic.name,
+      phone: clinic.phone,
+      email: clinic.email,
+      address: clinic.address,
+      city: clinic.city,
+      state: clinic.state,
+      operatingHours: clinic.operatingHours || "08:00 - 18:00",
+      timezone: clinic.timezone || "America/New_York",
+    })
+    await loadClinicAppointments(clinic.id)
+    const staffRes = await api.getClinicStaff(clinic.id)
+    if (staffRes) {
+      setStaffData({
+        doctors: staffRes.doctors || [],
+        memberships: staffRes.memberships || [],
+        invitations: staffRes.invitations || [],
+      })
+    }
+  }
+
   // Handle Create Clinic
   const handleCreateClinic = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       setIsCreatingClinic(true)
       const created = await api.createClinic(newClinicForm)
-      toast.success(`Clinic "${created.name}" created successfully!`)
+      toast.success(`Facility "${created.name}" created successfully!`)
       await loadClinicData()
     } catch (err: any) {
-      toast.error(err.message || "Failed to create clinic")
+      toast.error(err.message || "Failed to create clinic facility")
     } finally {
       setIsCreatingClinic(false)
     }
@@ -169,9 +200,9 @@ export function ClinicAdminDashboard() {
       setIsUpdatingSettings(true)
       const updated = await api.updateClinic(selectedClinic.id, settingsForm)
       setSelectedClinic(updated)
-      toast.success("Clinic profile and operating hours updated in Supabase!")
+      toast.success("Clinic profile and operating parameters updated!")
     } catch (err: any) {
-      toast.error(err.message || "Failed to update clinic")
+      toast.error(err.message || "Failed to update clinic profile")
     } finally {
       setIsUpdatingSettings(false)
     }
@@ -187,13 +218,12 @@ export function ClinicAdminDashboard() {
       setLastInviteToken(invitation.token)
       toast.success(`Invitation generated for ${inviteEmail}!`)
       setInviteEmail("")
-      // Reload staff data
       const staffRes = await api.getClinicStaff(selectedClinic.id)
       if (staffRes) {
         setStaffData({
           doctors: staffRes.doctors || [],
-          staff: staffRes.staff || [],
-          pendingInvitations: staffRes.pendingInvitations || [],
+          memberships: staffRes.memberships || [],
+          invitations: staffRes.invitations || [],
         })
       }
     } catch (err: any) {
@@ -206,111 +236,151 @@ export function ClinicAdminDashboard() {
   const copyToken = (token: string) => {
     navigator.clipboard.writeText(token)
     setHasCopiedToken(true)
-    toast.success("Invitation token copied to clipboard!")
+    toast.success("Invitation link copied to clipboard!")
     setTimeout(() => setHasCopiedToken(false), 2000)
   }
 
+  // Extract unique patients from appointments
+  const uniquePatients = Array.from(
+    new Map(
+      clinicAppointments
+        .filter(a => a.patient?.profile)
+        .map(a => [a.patientId, {
+          patientId: a.patientId,
+          name: `${a.patient!.profile.firstName} ${a.patient!.profile.lastName}`,
+          email: a.patient!.profile.email,
+          phone: a.patient!.profile.phone || "On File",
+          lastVisit: a.scheduledStart,
+          status: a.status,
+          visitType: a.visitType,
+        }])
+    ).values()
+  )
+
+  // Filtered appointments
+  const filteredAppointments = clinicAppointments.filter(app => {
+    const matchesDoctor = appointmentDoctorFilter === "ALL" || app.doctorId === appointmentDoctorFilter
+    const matchesStatus = appointmentStatusFilter === "ALL" || app.status === appointmentStatusFilter
+    const patientName = app.patient?.profile ? `${app.patient.profile.firstName} ${app.patient.profile.lastName}`.toLowerCase() : ""
+    const doctorName = app.doctor?.profile ? `${app.doctor.profile.firstName} ${app.doctor.profile.lastName}`.toLowerCase() : ""
+    const matchesSearch = !appointmentSearch || 
+      patientName.includes(appointmentSearch.toLowerCase()) || 
+      doctorName.includes(appointmentSearch.toLowerCase()) ||
+      app.bookingReference.toLowerCase().includes(appointmentSearch.toLowerCase())
+    return matchesDoctor && matchesStatus && matchesSearch
+  })
+
   const adminName = user ? `${user.firstName} ${user.lastName}` : "Elena Rostova"
-  const clinicTitle = selectedClinic ? selectedClinic.name : "Metro Heart & Specialty Clinic"
+  const clinicTitle = selectedClinic ? selectedClinic.name : "Metro Specialty Healthcare Facility"
 
   return (
     <DashboardShell
       roleTitle="Clinic Administrator"
       roleColor="emerald"
       userDisplayName={adminName}
-      userSubtitle={`Operations Director • ${clinicTitle}`}
+      userSubtitle={`Director of Clinical Operations • ${clinicTitle}`}
       userAvatar="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150"
       navItems={navItems}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
     >
-      {/* Onboarding Banner if No Clinic Found */}
-      {!loading && clinics.length === 0 && (
-        <Card className="p-8 border-emerald-500/50 bg-emerald-50/10 dark:bg-emerald-950/20 mb-6">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-600/15 text-emerald-600 flex items-center justify-center shrink-0">
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <RefreshCw className="w-6 h-6 animate-spin text-[#cb6440] mb-3" />
+          <p className="font-editorial-serif text-xl text-[#1e1815]">Synchronizing Clinic Administration</p>
+          <p className="text-xs text-[#6e6059] mt-1">Retrieving verified medical providers, appointment rosters, and facility operations...</p>
+        </div>
+      ) : (
+        <>
+          {/* ------------------------------------------------------------------- */}
+          {/* ONBOARDING BANNER IF NO CLINIC REGISTERED */}
+          {/* ------------------------------------------------------------------- */}
+          {clinics.length === 0 && (
+        <div className="p-8 rounded-2xl border border-[#cb6440]/30 bg-[#fbf5f2] mb-8">
+          <div className="flex items-start gap-5">
+            <div className="w-12 h-12 rounded-2xl bg-[#cb6440]/15 text-[#cb6440] flex items-center justify-center shrink-0">
               <Building2 className="w-6 h-6" />
             </div>
             <div className="space-y-4 flex-1">
               <div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                <h3 className="font-editorial-serif text-2xl font-normal text-[#1e1815]">
                   Register Your Healthcare Facility
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  You are signed in as an administrator. Create your clinic profile to start inviting doctors, defining operating hours, and handling patient bookings.
+                <p className="text-xs text-[#6e6059] mt-1 font-editorial-sans">
+                  You are signed in with clinic administration privileges. Create your clinical facility profile to start credentialing practitioners, configuring consultation hours, and receiving patient bookings.
                 </p>
               </div>
 
-              <form onSubmit={handleCreateClinic} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <form onSubmit={handleCreateClinic} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-editorial-sans">
                 <div>
-                  <label className="text-slate-400 block mb-1">Clinic Name</label>
+                  <label className="text-[#8c7e77] block mb-1">Facility Name</label>
                   <input
                     type="text"
                     required
                     value={newClinicForm.name}
                     onChange={(e) => setNewClinicForm({ ...newClinicForm, name: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-white font-medium focus:border-[#cb6440] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Contact Email</label>
+                  <label className="text-[#8c7e77] block mb-1">Administrative Email</label>
                   <input
                     type="email"
                     required
                     value={newClinicForm.email}
                     onChange={(e) => setNewClinicForm({ ...newClinicForm, email: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-white font-medium focus:border-[#cb6440] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Phone Number</label>
+                  <label className="text-[#8c7e77] block mb-1">Contact Phone</label>
                   <input
                     type="tel"
                     required
                     value={newClinicForm.phone}
                     onChange={(e) => setNewClinicForm({ ...newClinicForm, phone: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-white font-medium focus:border-[#cb6440] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Operating Hours</label>
+                  <label className="text-[#8c7e77] block mb-1">Standard Operating Hours</label>
                   <input
                     type="text"
                     value={newClinicForm.operatingHours}
                     onChange={(e) => setNewClinicForm({ ...newClinicForm, operatingHours: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-white font-medium focus:border-[#cb6440] outline-none"
                     placeholder="e.g. 08:00 - 18:00"
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="text-slate-400 block mb-1">Address</label>
+                  <label className="text-[#8c7e77] block mb-1">Clinical Campus Address</label>
                   <input
                     type="text"
                     required
                     value={newClinicForm.address}
                     onChange={(e) => setNewClinicForm({ ...newClinicForm, address: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-white font-medium focus:border-[#cb6440] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">City</label>
+                  <label className="text-[#8c7e77] block mb-1">City</label>
                   <input
                     type="text"
                     required
                     value={newClinicForm.city}
                     onChange={(e) => setNewClinicForm({ ...newClinicForm, city: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-white font-medium focus:border-[#cb6440] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">State / Postal Code</label>
+                  <label className="text-[#8c7e77] block mb-1">State / Postal Code</label>
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
                       required
                       value={newClinicForm.state}
                       onChange={(e) => setNewClinicForm({ ...newClinicForm, state: e.target.value })}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium"
+                      className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-white font-medium focus:border-[#cb6440] outline-none"
                       placeholder="State"
                     />
                     <input
@@ -318,664 +388,1080 @@ export function ClinicAdminDashboard() {
                       required
                       value={newClinicForm.postalCode}
                       onChange={(e) => setNewClinicForm({ ...newClinicForm, postalCode: e.target.value })}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium"
+                      className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-white font-medium focus:border-[#cb6440] outline-none"
                       placeholder="ZIP"
                     />
                   </div>
                 </div>
                 <div className="md:col-span-2 flex justify-end">
-                  <Button type="submit" variant="teal" size="sm" disabled={isCreatingClinic}>
-                    {isCreatingClinic ? "Registering in Supabase..." : "Register Clinic Facility"}
-                  </Button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingClinic}
+                    className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-6 py-2.5 text-xs font-medium cursor-pointer transition-colors"
+                  >
+                    {isCreatingClinic ? "Registering Facility..." : "Register Clinic Facility"}
+                  </button>
                 </div>
               </form>
             </div>
           </div>
-        </Card>
+        </div>
       )}
 
-      {/* Tab: Overview */}
+      {/* ------------------------------------------------------------------- */}
+      {/* 1. CLINIC OVERVIEW TAB */}
+      {/* ------------------------------------------------------------------- */}
       {activeTab === "overview" && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-8">
+          {/* Top Banner with Facility Selector */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-[#ece6dd]">
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{clinicTitle}</h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="font-editorial-serif text-3xl sm:text-4xl font-normal text-[#1e1815]">
+                  {clinicTitle}
+                </h1>
                 {selectedClinic?.isVerified ? (
-                  <Badge variant="teal" className="gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-teal-500" /> Verified Facility
-                  </Badge>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Verified Facility
+                  </span>
                 ) : (
-                  <Badge variant="neutral" className="gap-1 text-amber-600 dark:text-amber-400">
-                    Verification In Review
-                  </Badge>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#b58b4c]/10 text-[#8c6b3e] border border-[#b58b4c]/30">
+                    <AlertCircle className="w-3.5 h-3.5" /> Verification In Review
+                  </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                {selectedClinic?.address}, {selectedClinic?.city}, {selectedClinic?.state} • Hours: {selectedClinic?.operatingHours || "09:00 - 17:00"}
+              <p className="text-xs sm:text-sm text-[#6e6059] mt-2 flex flex-wrap items-center gap-4">
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-[#cb6440]" />
+                  {selectedClinic?.address}, {selectedClinic?.city}, {selectedClinic?.state}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#4a6356]" />
+                  Hours: {selectedClinic?.operatingHours || "08:00 - 18:00"}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-[#8c7e77]" />
+                  {selectedClinic?.phone}
+                </span>
               </p>
             </div>
-            <div className="flex gap-2">
-              <Button variant="teal" size="sm" className="gap-2" onClick={() => setShowInviteModal(true)}>
-                <Plus className="w-4 h-4" /> Invite Staff / Doctor
-              </Button>
-            </div>
-          </div>
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-4">
-              <span className="text-xs text-slate-400 font-medium">Today's Appointments</span>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">24</p>
-              <div className="flex items-center gap-1 text-[11px] text-emerald-600 mt-2 font-medium">
-                <TrendingUp className="w-3.5 h-3.5" /> 8 completed, 16 remaining
-              </div>
-            </Card>
-
-            <Card className="p-4">
-              <span className="text-xs text-slate-400 font-medium">Revenue (Today)</span>
-              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">$2,150.00</p>
-              <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-2 font-medium">
-                Collected via Razorpay
-              </div>
-            </Card>
-
-            <Card className="p-4">
-              <span className="text-xs text-slate-400 font-medium">Active Doctors</span>
-              <p className="text-2xl font-bold text-sky-600 dark:text-sky-400 mt-1">
-                {staffData.doctors.length} Registered
-              </p>
-              <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-2 font-medium">
-                In Supabase PostgreSQL
-              </div>
-            </Card>
-
-            <Card className="p-4">
-              <span className="text-xs text-slate-400 font-medium">Staff Members</span>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                {staffData.staff.length} Active
-              </p>
-              <div className="flex items-center gap-1 text-[11px] text-teal-600 mt-2 font-medium">
-                {staffData.pendingInvitations.length} Pending Invites
-              </div>
-            </Card>
-          </div>
-
-          {/* Today's Queue Preview */}
-          <Card className="p-6">
-            <h3 className="font-bold text-sm mb-4">Doctor Schedule Utilization</h3>
-            <div className="space-y-3 text-xs">
-              {staffData.doctors.length === 0 ? (
-                <div className="text-center py-6 text-slate-400">
-                  <Stethoscope className="w-8 h-8 mx-auto mb-2 opacity-40 text-teal-500" />
-                  <p>No doctors registered for this clinic yet.</p>
-                  <Button variant="outline" size="sm" className="mt-3 text-xs gap-1" onClick={() => setShowInviteModal(true)}>
-                    <Plus className="w-3.5 h-3.5" /> Invite First Doctor
-                  </Button>
-                </div>
-              ) : (
-                staffData.doctors.map((d: any) => (
-                  <div key={d.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                      <div>
-                        <span className="font-bold text-slate-800 dark:text-slate-200 block">
-                          Dr. {d.profile?.firstName} {d.profile?.lastName} ({d.specialty})
-                        </span>
-                        <span className="text-[11px] text-slate-400">
-                          Fee: ${Number(d.consultationFee).toFixed(2)} • License: {d.licenseNumber}
-                        </span>
-                      </div>
-                    </div>
-                    <Badge variant={d.licenseVerified ? "teal" : "neutral"}>
-                      {d.licenseVerified ? "Verified Practitioner" : "License Unverified"}
-                    </Badge>
-                  </div>
-                ))
+            <div className="flex flex-wrap items-center gap-3">
+              {clinics.length > 1 && (
+                <select
+                  value={selectedClinic?.id}
+                  onChange={(e) => {
+                    const found = clinics.find(c => c.id === e.target.value)
+                    if (found) handleSelectClinic(found)
+                  }}
+                  className="rounded-full border border-[#e4ded5] bg-white px-4 py-2 text-xs font-medium text-[#1e1815] outline-none cursor-pointer hover:bg-[#fbf9f5]"
+                >
+                  {clinics.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               )}
+              <button
+                type="button"
+                onClick={() => setShowInviteModal(true)}
+                className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2.5 text-xs font-medium cursor-pointer transition-colors shadow-xs flex items-center gap-2"
+              >
+                <Plus className="w-3.5 h-3.5" /> Invite Practitioner
+              </button>
             </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Tab: Doctors */}
-      {activeTab === "doctors" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Clinic Doctors & Practitioners</h1>
-              <p className="text-xs text-slate-500 mt-1">Manage practitioner credentials, commission rates, and room allocations.</p>
-            </div>
-            <Button variant="teal" size="sm" className="gap-2" onClick={() => setShowInviteModal(true)}>
-              <Plus className="w-4 h-4" /> Invite Doctor
-            </Button>
           </div>
 
-          <Card>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
-                  <tr>
-                    <th className="p-4">Doctor Name</th>
-                    <th className="p-4">Specialty</th>
-                    <th className="p-4">License Number</th>
-                    <th className="p-4">Fee / Visit</th>
-                    <th className="p-4">Audit Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {staffData.doctors.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-400">
-                        No doctors currently linked to this facility. Use the Invite button to onboard physicians.
-                      </td>
-                    </tr>
-                  ) : (
-                    staffData.doctors.map((d: any) => (
-                      <tr key={d.id}>
-                        <td className="p-4 font-bold text-slate-900 dark:text-white">
-                          Dr. {d.profile?.firstName} {d.profile?.lastName}
-                        </td>
-                        <td className="p-4 text-slate-600 dark:text-slate-300">{d.specialty}</td>
-                        <td className="p-4 font-mono text-slate-400">{d.licenseNumber}</td>
-                        <td className="p-4 font-semibold text-slate-900 dark:text-white">
-                          ${Number(d.consultationFee).toFixed(2)}
-                        </td>
-                        <td className="p-4">
-                          <Badge variant={d.licenseVerified ? "teal" : "neutral"}>
-                            {d.licenseVerified ? "Verified" : "Pending Audit"}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          {/* Real Operational Metrics Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+              <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Total Consultations</span>
+              <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
+                {clinicAppointments.length}
+              </p>
+              <div className="flex items-center gap-1.5 text-xs text-[#4a6356] mt-3 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {clinicAppointments.filter(a => a.status === "COMPLETED").length} completed, {clinicAppointments.filter(a => a.status === "CONFIRMED" || a.status === "IN_PROGRESS").length} scheduled
+              </div>
             </div>
-          </Card>
-        </div>
-      )}
 
-      {/* Tab: Staff & Invitations */}
-      {activeTab === "staff" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Staff Roster & Secure Invitations</h1>
-              <p className="text-xs text-slate-500 mt-1">Manage receptionists, billing personnel, and track invitation tokens.</p>
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+              <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Credentialed Doctors</span>
+              <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
+                {staffData.doctors.length}
+              </p>
+              <div className="flex items-center gap-1.5 text-xs text-[#6e6059] mt-3 font-medium">
+                <Stethoscope className="w-3.5 h-3.5 text-[#cb6440]" /> Active Clinical Roster
+              </div>
             </div>
-            <Button variant="teal" size="sm" className="gap-2" onClick={() => setShowInviteModal(true)}>
-              <Plus className="w-4 h-4" /> Invite Staff
-            </Button>
+
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+              <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Clinical Staff Members</span>
+              <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
+                {staffData.memberships.length}
+              </p>
+              <div className="flex items-center gap-1.5 text-xs text-[#8c6b3e] mt-3 font-medium">
+                <Users className="w-3.5 h-3.5" /> {staffData.invitations.length} Pending Invitations
+              </div>
+            </div>
+
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+              <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Estimated Fee Volume</span>
+              <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
+                ${clinicAppointments.reduce((sum, a) => sum + (Number(a.consultationFee) || 50), 0).toLocaleString()}
+              </p>
+              <div className="flex items-center gap-1.5 text-xs text-[#4a6356] mt-3 font-medium">
+                <BarChart3 className="w-3.5 h-3.5" /> Live Encounters Data
+              </div>
+            </div>
           </div>
 
-          {/* Pending Invitations */}
-          <Card className="p-6 space-y-4">
-            <h3 className="font-bold text-sm">Active Pending Invitations ({staffData.pendingInvitations.length})</h3>
-            {staffData.pendingInvitations.length === 0 ? (
-              <p className="text-xs text-slate-400 italic">No pending invitations. All invited members have registered.</p>
+          {/* Quick Encounter Pipeline: Active Queue Snapshot */}
+          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#ece6dd]">
+              <div>
+                <h3 className="font-editorial-serif text-xl text-[#1e1815]">Immediate Consultation Queue</h3>
+                <p className="text-xs text-[#6e6059]">Active and upcoming appointments scheduled at this facility</p>
+              </div>
+              <button
+                onClick={() => setActiveTab("queue")}
+                className="text-xs text-[#cb6440] hover:underline font-medium cursor-pointer"
+              >
+                View Full Queue →
+              </button>
+            </div>
+
+            {clinicAppointments.filter(a => a.status === "CONFIRMED" || a.status === "IN_PROGRESS").length === 0 ? (
+              <div className="py-8 text-center text-xs text-[#8c7e77]">
+                No patients currently waiting in consultation queue.
+              </div>
             ) : (
-              <div className="space-y-2">
-                {staffData.pendingInvitations.map((inv: any) => (
-                  <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs gap-3">
-                    <div className="flex items-center gap-3">
-                      <Mail className="w-4 h-4 text-teal-600" />
-                      <div>
-                        <span className="font-bold text-slate-900 dark:text-white">{inv.email}</span>
-                        <span className="text-[10px] text-slate-400 block">
-                          Role: {inv.role} • Expires: {new Date(inv.expiresAt).toLocaleDateString()}
+              <div className="divide-y divide-[#ece6dd]">
+                {clinicAppointments
+                  .filter(a => a.status === "CONFIRMED" || a.status === "IN_PROGRESS")
+                  .slice(0, 4)
+                  .map(app => (
+                    <div key={app.id} className="py-3 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-[#fbf5f2] border border-[#ece6dd] flex items-center justify-center text-xs font-bold text-[#cb6440]">
+                          {app.patient?.profile.firstName?.[0] || "P"}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-[#1e1815]">
+                            {app.patient?.profile.firstName} {app.patient?.profile.lastName}
+                          </p>
+                          <p className="text-[11px] text-[#6e6059]">
+                            Dr. {app.doctor?.profile.firstName} {app.doctor?.profile.lastName} • {new Date(app.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                          app.status === "IN_PROGRESS"
+                            ? "bg-[#cb6440]/10 text-[#cb6440] border border-[#cb6440]/30"
+                            : "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
+                        }`}>
+                          {app.status.replace("_", " ")}
                         </span>
+                        <button
+                          onClick={() => handleUpdateClinicAppointmentStatus(app.id, "COMPLETED")}
+                          className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+                        >
+                          Complete
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <code className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-[11px] font-mono select-all">
-                        {inv.token.substring(0, 16)}...
-                      </code>
-                      <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => copyToken(inv.token)}>
-                        <Copy className="w-3.5 h-3.5" /> Copy Token
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
-          </Card>
+          </div>
+        </div>
+      )}
 
-          {/* Current Staff Roster */}
-          <Card>
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-              <h3 className="font-bold text-sm">Active Clinic Staff Roster</h3>
+      {/* ------------------------------------------------------------------- */}
+      {/* 2. CONSULTATION QUEUE TAB */}
+      {/* ------------------------------------------------------------------- */}
+      {activeTab === "queue" && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#ece6dd]">
+            <div>
+              <h1 className="font-editorial-serif text-3xl font-normal text-[#1e1815]">
+                Real-Time Consultation Queue
+              </h1>
+              <p className="text-xs text-[#6e6059] mt-1">
+                Monitor patient arrivals, check-in status, and examination room progression across all facility providers.
+              </p>
             </div>
+            <button
+              onClick={() => selectedClinic && loadClinicAppointments(selectedClinic.id)}
+              className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-4 py-2 text-xs font-medium cursor-pointer transition-colors"
+            >
+              Refresh Queue
+            </button>
+          </div>
+
+          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
+                <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
                   <tr>
-                    <th className="p-4">Staff Member</th>
-                    <th className="p-4">Email</th>
-                    <th className="p-4">Clinic Role</th>
-                    <th className="p-4">Joined Date</th>
-                    <th className="p-4">Status</th>
+                    <th className="p-3.5">Ref / Time</th>
+                    <th className="p-3.5">Patient Details</th>
+                    <th className="p-3.5">Attending Practitioner</th>
+                    <th className="p-3.5">Encounter Mode</th>
+                    <th className="p-3.5">Status</th>
+                    <th className="p-3.5 text-right">Queue Operations</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {staffData.staff.length === 0 ? (
+                <tbody className="divide-y divide-[#ece6dd]">
+                  {clinicAppointments.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-400">
-                        No additional staff members found.
+                      <td colSpan={6} className="p-8 text-center text-[#8c7e77]">
+                        No consultations currently logged in database for this facility.
                       </td>
                     </tr>
                   ) : (
-                    staffData.staff.map((m: any) => (
-                      <tr key={m.id}>
-                        <td className="p-4 font-bold text-slate-900 dark:text-white">
-                          {m.profile?.firstName} {m.profile?.lastName}
+                    clinicAppointments.map(app => (
+                      <tr key={app.id} className="hover:bg-[#fbf9f5]/60 transition-colors">
+                        <td className="p-3.5">
+                          <span className="font-mono font-semibold text-[#1e1815]">{app.bookingReference}</span>
+                          <span className="block text-[10px] text-[#8c7e77]">
+                            {new Date(app.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         </td>
-                        <td className="p-4 text-slate-500">{m.profile?.email}</td>
-                        <td className="p-4"><Badge variant="teal">{m.clinicRole}</Badge></td>
-                        <td className="p-4 text-slate-400">{new Date(m.createdAt).toLocaleDateString()}</td>
-                        <td className="p-4"><Badge variant="teal">Active</Badge></td>
+                        <td className="p-3.5">
+                          <p className="font-bold text-[#1e1815]">
+                            {app.patient?.profile.firstName} {app.patient?.profile.lastName}
+                          </p>
+                          <p className="text-[10px] text-[#8c7e77]">{app.patient?.profile.email}</p>
+                        </td>
+                        <td className="p-3.5">
+                          <p className="font-medium text-[#1e1815]">
+                            Dr. {app.doctor?.profile.firstName} {app.doctor?.profile.lastName}
+                          </p>
+                          <p className="text-[10px] text-[#8c7e77]">{app.doctor?.specialty}</p>
+                        </td>
+                        <td className="p-3.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#fbf5f2] border border-[#ece6dd] text-[#6e6059]">
+                            {app.visitType}
+                          </span>
+                        </td>
+                        <td className="p-3.5">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                            app.status === "COMPLETED"
+                              ? "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
+                              : app.status === "IN_PROGRESS"
+                              ? "bg-[#cb6440]/10 text-[#cb6440] border border-[#cb6440]/30"
+                              : app.status === "CONFIRMED"
+                              ? "bg-[#8c6b3e]/10 text-[#8c6b3e] border border-[#8c6b3e]/30"
+                              : "bg-[#e4ded5] text-[#6e6059]"
+                          }`}>
+                            {app.status.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-right space-x-1.5">
+                          {app.status !== "IN_PROGRESS" && app.status !== "COMPLETED" && (
+                            <button
+                              onClick={() => handleUpdateClinicAppointmentStatus(app.id, "IN_PROGRESS")}
+                              className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+                            >
+                              Check-In
+                            </button>
+                          )}
+                          {app.status === "IN_PROGRESS" && (
+                            <button
+                              onClick={() => handleUpdateClinicAppointmentStatus(app.id, "COMPLETED")}
+                              className="rounded-full bg-[#4a6356] hover:bg-[#3d5247] text-white px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+                            >
+                              Complete
+                            </button>
+                          )}
+                          {app.status !== "CANCELLED" && app.status !== "COMPLETED" && (
+                            <button
+                              onClick={() => handleUpdateClinicAppointmentStatus(app.id, "CANCELLED")}
+                              className="rounded-full border border-[#e4ded5] text-[#b85633] hover:bg-[#ede6dc] px-2.5 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}
                 </tbody>
               </table>
             </div>
-          </Card>
+          </div>
         </div>
       )}
 
-      {/* Tab: Appointments */}
+      {/* ------------------------------------------------------------------- */}
+      {/* 3. MASTER APPOINTMENTS TAB */}
+      {/* ------------------------------------------------------------------- */}
       {activeTab === "appointments" && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#ece6dd]">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Clinic Master Appointment Ledger</h1>
-              <p className="text-xs text-slate-500 mt-1">
-                Cross-practitioner booking schedule with instant check-in • {clinicAppointments.length} total consultations
+              <h1 className="font-editorial-serif text-3xl font-normal text-[#1e1815]">
+                Master Clinical Appointments
+              </h1>
+              <p className="text-xs text-[#6e6059] mt-1">
+                Centralized registry of patient bookings, encounter types, and fee settlement status.
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="teal">Real-Time Ledger</Badge>
+              <button
+                type="button"
+                onClick={() => selectedClinic && loadClinicAppointments(selectedClinic.id)}
+                disabled={loadingAppointments}
+                className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors inline-flex items-center gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingAppointments ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
+              <span className="text-xs text-[#8c7e77]">
+                Total: <strong>{filteredAppointments.length}</strong> records
+              </span>
             </div>
           </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs">
+          {/* Filters Bar */}
+          <div className="p-4 rounded-2xl border border-[#ece6dd] bg-white shadow-xs flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="w-3.5 h-3.5 text-[#8c7e77] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search patient, doctor, or booking reference..."
+                value={appointmentSearch}
+                onChange={(e) => setAppointmentSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[#e4ded5] bg-[#fbf9f5] outline-none focus:border-[#cb6440]"
+              />
+            </div>
+
             <div className="flex items-center gap-2">
-              <span className="text-slate-400 font-medium">Doctor:</span>
+              <Filter className="w-3.5 h-3.5 text-[#8c7e77]" />
               <select
                 value={appointmentDoctorFilter}
                 onChange={(e) => setAppointmentDoctorFilter(e.target.value)}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                className="text-xs rounded-xl border border-[#e4ded5] bg-[#fbf9f5] px-3 py-2 outline-none cursor-pointer"
               >
-                <option value="ALL">All Clinic Doctors</option>
-                {staffData.doctors.map((d: any) => (
+                <option value="ALL">All Practitioners</option>
+                {staffData.doctors.map(d => (
                   <option key={d.id} value={d.id}>
-                    Dr. {d.profile?.firstName} {d.profile?.lastName} ({d.specialty})
+                    Dr. {d.profile.firstName} {d.profile.lastName} ({d.specialty})
                   </option>
                 ))}
               </select>
-            </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400 font-medium">Status:</span>
               <select
                 value={appointmentStatusFilter}
                 onChange={(e) => setAppointmentStatusFilter(e.target.value)}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                className="text-xs rounded-xl border border-[#e4ded5] bg-[#fbf9f5] px-3 py-2 outline-none cursor-pointer"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="CONFIRMED">Confirmed</option>
                 <option value="IN_PROGRESS">In Progress</option>
                 <option value="COMPLETED">Completed</option>
                 <option value="CANCELLED">Cancelled</option>
-                <option value="NO_SHOW">No Show</option>
+                <option value="PENDING">Pending</option>
               </select>
             </div>
           </div>
 
-          {/* Appointments Table */}
-          <Card>
+          {/* Master Table */}
+          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
+                <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
                   <tr>
-                    <th className="p-4">Reference</th>
-                    <th className="p-4">Patient</th>
-                    <th className="p-4">Assigned Doctor</th>
-                    <th className="p-4">Scheduled Slot</th>
-                    <th className="p-4">Type</th>
-                    <th className="p-4">Fee / Payment</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4 text-right">Desk Actions</th>
+                    <th className="p-3.5">Reference</th>
+                    <th className="p-3.5">Patient</th>
+                    <th className="p-3.5">Doctor</th>
+                    <th className="p-3.5">Date & Time</th>
+                    <th className="p-3.5">Fee</th>
+                    <th className="p-3.5">Status</th>
+                    <th className="p-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {loadingAppointments ? (
+                <tbody className="divide-y divide-[#ece6dd]">
+                  {filteredAppointments.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-400">Loading clinic appointments...</td>
-                    </tr>
-                  ) : clinicAppointments
-                      .filter(a => appointmentDoctorFilter === "ALL" || a.doctorId === appointmentDoctorFilter)
-                      .filter(a => appointmentStatusFilter === "ALL" || a.status === appointmentStatusFilter)
-                      .length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-400">
-                        No appointments found matching this criteria.
+                      <td colSpan={7} className="p-8 text-center text-[#8c7e77]">
+                        No appointments match the selected filters.
                       </td>
                     </tr>
                   ) : (
-                    clinicAppointments
-                      .filter(a => appointmentDoctorFilter === "ALL" || a.doctorId === appointmentDoctorFilter)
-                      .filter(a => appointmentStatusFilter === "ALL" || a.status === appointmentStatusFilter)
-                      .map((apt) => {
-                        const start = new Date(apt.scheduledStart);
-                        const timeStr = start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                        const dateStr = start.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
-                        const patientName = apt.patient?.profile 
-                          ? `${apt.patient.profile.firstName} ${apt.patient.profile.lastName}`
-                          : "Patient";
-                        const doctorName = apt.doctor?.profile
-                          ? `Dr. ${apt.doctor.profile.firstName} ${apt.doctor.profile.lastName}`
-                          : "Doctor";
-
-                        return (
-                          <tr key={apt.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                            <td className="p-4 font-mono font-bold text-teal-600 dark:text-teal-400">
-                              {apt.bookingReference || apt.id.substring(0, 8)}
-                            </td>
-                            <td className="p-4 font-semibold text-slate-900 dark:text-white">
-                              {patientName}
-                            </td>
-                            <td className="p-4 text-slate-600 dark:text-slate-300">
-                              {doctorName}
-                            </td>
-                            <td className="p-4 text-slate-600 dark:text-slate-300">
-                              <span className="font-medium text-slate-900 dark:text-white block">{timeStr}</span>
-                              <span className="text-[10px] text-slate-400">{dateStr}</span>
-                            </td>
-                            <td className="p-4">
-                              <Badge variant={apt.visitType === "VIDEO_VISIT" ? "info" : "teal"}>
-                                {apt.visitType === "VIDEO_VISIT" ? "Video Visit" : "In-Clinic"}
-                              </Badge>
-                            </td>
-                            <td className="p-4">
-                              <span className="font-semibold block">${Number(apt.consultationFee || 0).toFixed(2)}</span>
-                              <span className="text-[10px] text-slate-400">{apt.paymentStatus}</span>
-                            </td>
-                            <td className="p-4">
-                              <Badge variant={
-                                apt.status === "CONFIRMED" ? "teal" :
-                                apt.status === "IN_PROGRESS" ? "warning" :
-                                apt.status === "COMPLETED" ? "success" :
-                                apt.status === "CANCELLED" ? "danger" : "neutral"
-                              }>
-                                {apt.status.replace("_", " ")}
-                              </Badge>
-                            </td>
-                            <td className="p-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                {(apt.status === "CONFIRMED" || apt.status === "PENDING") && (
-                                  <>
-                                    <Button
-                                      variant="teal"
-                                      size="sm"
-                                      className="text-[11px] h-7 px-2.5"
-                                      onClick={() => handleUpdateClinicAppointmentStatus(apt.id, "IN_PROGRESS")}
-                                    >
-                                      Check-In
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-[11px] h-7 px-2 text-rose-600 hover:bg-rose-50"
-                                      onClick={() => handleUpdateClinicAppointmentStatus(apt.id, "NO_SHOW")}
-                                    >
-                                      No-Show
-                                    </Button>
-                                  </>
-                                )}
-                                {apt.status === "IN_PROGRESS" && (
-                                  <Button
-                                    variant="teal"
-                                    size="sm"
-                                    className="text-[11px] h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                    onClick={() => handleUpdateClinicAppointmentStatus(apt.id, "COMPLETED")}
-                                  >
-                                    Complete
-                                  </Button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
+                    filteredAppointments.map(app => (
+                      <tr key={app.id} className="hover:bg-[#fbf9f5]/60 transition-colors">
+                        <td className="p-3.5 font-mono font-medium text-[#1e1815]">
+                          {app.bookingReference}
+                        </td>
+                        <td className="p-3.5">
+                          <p className="font-bold text-[#1e1815]">
+                            {app.patient?.profile.firstName} {app.patient?.profile.lastName}
+                          </p>
+                          <p className="text-[10px] text-[#8c7e77]">{app.patient?.profile.email}</p>
+                        </td>
+                        <td className="p-3.5">
+                          <p className="font-medium text-[#1e1815]">
+                            Dr. {app.doctor?.profile.firstName} {app.doctor?.profile.lastName}
+                          </p>
+                          <p className="text-[10px] text-[#8c7e77]">{app.doctor?.specialty}</p>
+                        </td>
+                        <td className="p-3.5">
+                          <p className="text-[#1e1815] font-medium">
+                            {new Date(app.scheduledStart).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                          <p className="text-[10px] text-[#8c7e77]">
+                            {new Date(app.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </td>
+                        <td className="p-3.5 font-medium text-[#1e1815]">
+                          ${Number(app.consultationFee) || 50}
+                        </td>
+                        <td className="p-3.5">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                            app.status === "COMPLETED"
+                              ? "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
+                              : app.status === "IN_PROGRESS"
+                              ? "bg-[#cb6440]/10 text-[#cb6440] border border-[#cb6440]/30"
+                              : app.status === "CONFIRMED"
+                              ? "bg-[#8c6b3e]/10 text-[#8c6b3e] border border-[#8c6b3e]/30"
+                              : "bg-[#e4ded5] text-[#6e6059]"
+                          }`}>
+                            {app.status.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <button
+                            onClick={() => setSelectedAppointment(app)}
+                            className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+                          >
+                            Inspect
+                          </button>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
-          </Card>
+          </div>
         </div>
       )}
 
-      {/* Tab: Payments */}
-      {activeTab === "payments" && (
+      {/* ------------------------------------------------------------------- */}
+      {/* 4. DOCTORS & PROVIDERS TAB */}
+      {/* ------------------------------------------------------------------- */}
+      {activeTab === "doctors" && (
         <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Revenue, Invoices & Payouts</h1>
-            <p className="text-xs text-slate-500 mt-1">Track patient collections and doctor payout percentages.</p>
-          </div>
-          <Card className="p-6">
-            <p className="text-xs text-slate-500">Integrated Razorpay test transactions and refund workflow.</p>
-          </Card>
-        </div>
-      )}
-
-      {/* Tab: Analytics */}
-      {activeTab === "analytics" && (
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Clinic Analytics & KPI Engine</h1>
-            <p className="text-xs text-slate-500 mt-1">Capacity utilization, patient retention, and peak consultation hours.</p>
-          </div>
-          <Card className="p-6">
-            <div className="h-48 flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-400">
-              Recharts Visualizations will be wired in Phase 8 (Consultation Trends, No-Show Correlation)
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#ece6dd]">
+            <div>
+              <h1 className="font-editorial-serif text-3xl font-normal text-[#1e1815]">
+                Practitioners & Medical Staff
+              </h1>
+              <p className="text-xs text-[#6e6059] mt-1">
+                Credentialed healthcare specialists licensed to accept patient consultations at this facility.
+              </p>
             </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Tab: Reports */}
-      {activeTab === "reports" && (
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Compliance & Clinical Reports</h1>
-            <p className="text-xs text-slate-500 mt-1">Monthly audits, HIPAA access logs, and attendance summaries.</p>
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2 text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Invite Doctor
+            </button>
           </div>
-          <Card className="p-6">
-            <Button variant="outline" size="sm" className="text-xs">Export CSV Audit Trail</Button>
-          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {staffData.doctors.length === 0 ? (
+              <div className="col-span-3 p-8 text-center text-xs text-[#8c7e77] bg-white rounded-2xl border border-[#ece6dd]">
+                No doctors currently affiliated with this clinic. Use the Invite Doctor button above.
+              </div>
+            ) : (
+              staffData.doctors.map(doc => (
+                <div key={doc.id} className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs space-y-4">
+                  <div className="flex items-start gap-4">
+                    <img
+                      src={doc.profile.avatarUrl || "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=150"}
+                      alt={doc.profile.firstName}
+                      className="w-12 h-12 rounded-full object-cover border border-[#ece6dd]"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-editorial-serif text-lg text-[#1e1815] truncate">
+                        Dr. {doc.profile.firstName} {doc.profile.lastName}
+                      </h4>
+                      <p className="text-xs text-[#cb6440] font-medium">{doc.specialty}</p>
+                      <p className="text-[11px] text-[#8c7e77] mt-0.5 truncate">{doc.profile.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-3 border-t border-[#ece6dd] text-[11px]">
+                    <div>
+                      <span className="text-[#8c7e77] block">License</span>
+                      <span className="font-mono font-medium text-[#1e1815]">{doc.licenseNumber || "VERIFIED"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#8c7e77] block">Fee</span>
+                      <span className="font-medium text-[#1e1815]">${Number(doc.consultationFee) || 50}/session</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-between items-center text-xs">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-[#4a6356] font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Credentialed
+                    </span>
+                    <button
+                      onClick={() => {
+                        setAppointmentDoctorFilter(doc.id)
+                        setActiveTab("appointments")
+                      }}
+                      className="text-[#cb6440] hover:underline font-medium text-[11px] cursor-pointer"
+                    >
+                      View Schedule →
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 
-      {/* Tab: Settings */}
+      {/* ------------------------------------------------------------------- */}
+      {/* 5. PATIENT DIRECTORY TAB */}
+      {/* ------------------------------------------------------------------- */}
+      {activeTab === "patients" && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#ece6dd]">
+            <div>
+              <h1 className="font-editorial-serif text-3xl font-normal text-[#1e1815]">
+                Facility Patient Administration
+              </h1>
+              <p className="text-xs text-[#6e6059] mt-1">
+                Patients who have booked consultations at this facility. Access governed by authorized clinical permissions.
+              </p>
+            </div>
+            <span className="text-xs text-[#8c7e77]">
+              Total: <strong>{uniquePatients.length}</strong> registered patients
+            </span>
+          </div>
+
+          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
+                  <tr>
+                    <th className="p-3.5">Patient Name</th>
+                    <th className="p-3.5">Account Email</th>
+                    <th className="p-3.5">Telephone</th>
+                    <th className="p-3.5">Recent Visit</th>
+                    <th className="p-3.5">Last Encounter Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#ece6dd]">
+                  {uniquePatients.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-[#8c7e77]">
+                        No patient records logged yet for this facility.
+                      </td>
+                    </tr>
+                  ) : (
+                    uniquePatients.map(pat => (
+                      <tr key={pat.patientId} className="hover:bg-[#fbf9f5]/60 transition-colors">
+                        <td className="p-3.5 font-bold text-[#1e1815]">{pat.name}</td>
+                        <td className="p-3.5 text-[#6e6059]">{pat.email}</td>
+                        <td className="p-3.5 text-[#8c7e77]">{pat.phone}</td>
+                        <td className="p-3.5 text-[#1e1815]">
+                          {new Date(pat.lastVisit).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="p-3.5">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30">
+                            {pat.status.replace("_", " ")}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* 6. STAFF & INVITATIONS TAB */}
+      {/* ------------------------------------------------------------------- */}
+      {activeTab === "staff" && (
+        <div className="space-y-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#ece6dd]">
+            <div>
+              <h1 className="font-editorial-serif text-3xl font-normal text-[#1e1815]">
+                Facility Staff & Invitations
+              </h1>
+              <p className="text-xs text-[#6e6059] mt-1">
+                Manage clinic owners, administrators, reception staff, and issue secure invitation tokens.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2 text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Invite Staff
+            </button>
+          </div>
+
+          {/* Active Memberships */}
+          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs space-y-4">
+            <h3 className="font-editorial-serif text-xl text-[#1e1815]">Active Facility Personnel</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
+                  <tr>
+                    <th className="p-3.5">Name</th>
+                    <th className="p-3.5">Email</th>
+                    <th className="p-3.5">System Role</th>
+                    <th className="p-3.5">Clinic Role</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#ece6dd]">
+                  {staffData.memberships.map((m: any) => (
+                    <tr key={m.id} className="hover:bg-[#fbf9f5]/60 transition-colors">
+                      <td className="p-3.5 font-bold text-[#1e1815]">
+                        {m.profile?.firstName} {m.profile?.lastName}
+                      </td>
+                      <td className="p-3.5 text-[#6e6059]">{m.profile?.email}</td>
+                      <td className="p-3.5">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30">
+                          {m.profile?.role}
+                        </span>
+                      </td>
+                      <td className="p-3.5 font-semibold text-[#8c6b3e]">{m.clinicRole || "ADMIN"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Pending Invitations */}
+          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs space-y-4">
+            <h3 className="font-editorial-serif text-xl text-[#1e1815]">Pending Token Invitations</h3>
+            {staffData.invitations.length === 0 ? (
+              <p className="text-xs text-[#8c7e77] py-4">No pending invitations. All invitations have been claimed.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
+                    <tr>
+                      <th className="p-3.5">Invited Recipient</th>
+                      <th className="p-3.5">Assigned Role</th>
+                      <th className="p-3.5">Invitation Token</th>
+                      <th className="p-3.5">Expiration</th>
+                      <th className="p-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#ece6dd]">
+                    {staffData.invitations.map((inv: any) => (
+                      <tr key={inv.id} className="hover:bg-[#fbf9f5]/60 transition-colors">
+                        <td className="p-3.5 font-bold text-[#1e1815]">{inv.email}</td>
+                        <td className="p-3.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#b58b4c]/10 text-[#8c6b3e] border border-[#b58b4c]/30">
+                            {inv.role}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-mono text-[11px] text-[#6e6059]">
+                          {inv.token.slice(0, 16)}...
+                        </td>
+                        <td className="p-3.5 text-[#8c7e77]">
+                          {new Date(inv.expiresAt).toLocaleDateString()}
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <button
+                            onClick={() => copyToken(inv.token)}
+                            className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors inline-flex items-center gap-1"
+                          >
+                            <Copy className="w-3 h-3" /> Copy
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* 7. HOURS & AVAILABILITY TAB */}
+      {/* ------------------------------------------------------------------- */}
+      {activeTab === "hours" && (
+        <div className="space-y-6">
+          <div className="pb-4 border-b border-[#ece6dd]">
+            <h1 className="font-editorial-serif text-3xl font-normal text-[#1e1815]">
+              Operating Hours & Coverage
+            </h1>
+            <p className="text-xs text-[#6e6059] mt-1">
+              Standard clinic operational windows, reception desk shifts, and emergency triage hours.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-7 p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs space-y-4">
+              <h3 className="font-editorial-serif text-xl text-[#1e1815]">Standard Operating Schedule</h3>
+              <div className="divide-y divide-[#ece6dd] text-xs">
+                {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map(day => (
+                  <div key={day} className="py-3 flex items-center justify-between">
+                    <span className="font-medium text-[#1e1815]">{day}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[#4a6356] font-medium">{selectedClinic?.operatingHours || "08:00 - 18:00"}</span>
+                      <span className="w-2 h-2 rounded-full bg-[#4a6356]" />
+                    </div>
+                  </div>
+                ))}
+                <div className="py-3 flex items-center justify-between">
+                  <span className="font-medium text-[#1e1815]">Saturday</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[#8c6b3e] font-medium">09:00 - 14:00 (Urgent Consults)</span>
+                    <span className="w-2 h-2 rounded-full bg-[#8c6b3e]" />
+                  </div>
+                </div>
+                <div className="py-3 flex items-center justify-between">
+                  <span className="font-medium text-[#1e1815]">Sunday</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[#8c7e77]">Closed (On-Call Only)</span>
+                    <span className="w-2 h-2 rounded-full bg-[#e4ded5]" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-5 p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs space-y-4">
+              <h3 className="font-editorial-serif text-xl text-[#1e1815]">Update Operating Window</h3>
+              <form onSubmit={handleUpdateSettings} className="space-y-4 text-xs font-editorial-sans">
+                <div>
+                  <label className="text-[#8c7e77] block mb-1">Standard Operating Hours</label>
+                  <input
+                    type="text"
+                    value={settingsForm.operatingHours}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, operatingHours: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none"
+                    placeholder="e.g. 08:00 - 18:00"
+                  />
+                </div>
+                <div>
+                  <label className="text-[#8c7e77] block mb-1">Timezone</label>
+                  <input
+                    type="text"
+                    value={settingsForm.timezone}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, timezone: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none"
+                    placeholder="e.g. America/New_York"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isUpdatingSettings}
+                  className="w-full rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white py-2.5 text-xs font-medium cursor-pointer transition-colors"
+                >
+                  {isUpdatingSettings ? "Saving..." : "Save Operating Window"}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* 8. CLINIC SETTINGS TAB */}
+      {/* ------------------------------------------------------------------- */}
       {activeTab === "settings" && (
         <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Clinic Profile & Operating Hours</h1>
-            <p className="text-xs text-slate-500 mt-1">Configure clinic address, phone, and booking cancellation policies in Supabase.</p>
+          <div className="pb-4 border-b border-[#ece6dd]">
+            <h1 className="font-editorial-serif text-3xl font-normal text-[#1e1815]">
+              Clinic Profile & Configuration
+            </h1>
+            <p className="text-xs text-[#6e6059] mt-1">
+              Maintain institutional credentials, official phone numbers, and physical location coordinates.
+            </p>
           </div>
-          <Card className="p-6 space-y-4">
-            <form onSubmit={handleUpdateSettings} className="space-y-4 text-xs">
+
+          <div className="p-8 rounded-2xl border border-[#ece6dd] bg-white shadow-xs max-w-3xl">
+            <form onSubmit={handleUpdateSettings} className="space-y-5 text-xs font-editorial-sans">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-slate-400 block mb-1">Clinic Name</label>
+                  <label className="text-[#8c7e77] block mb-1">Facility Name</label>
                   <input
                     type="text"
                     required
                     value={settingsForm.name}
                     onChange={(e) => setSettingsForm({ ...settingsForm, name: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Contact Phone</label>
+                  <label className="text-[#8c7e77] block mb-1">Official Contact Phone</label>
                   <input
                     type="tel"
                     required
                     value={settingsForm.phone}
                     onChange={(e) => setSettingsForm({ ...settingsForm, phone: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Contact Email</label>
+                  <label className="text-[#8c7e77] block mb-1">Official Email Address</label>
                   <input
                     type="email"
                     required
                     value={settingsForm.email}
                     onChange={(e) => setSettingsForm({ ...settingsForm, email: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Operating Hours</label>
-                  <input
-                    type="text"
-                    required
-                    value={settingsForm.operatingHours}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, operatingHours: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                    placeholder="e.g. 08:30 - 17:30"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-slate-400 block mb-1">Address</label>
-                  <input
-                    type="text"
-                    required
-                    value={settingsForm.address}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, address: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-400 block mb-1">City</label>
+                  <label className="text-[#8c7e77] block mb-1">City</label>
                   <input
                     type="text"
                     required
                     value={settingsForm.city}
                     onChange={(e) => setSettingsForm({ ...settingsForm, city: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-[#8c7e77] block mb-1">Street Address</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.address}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, address: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">State</label>
+                  <label className="text-[#8c7e77] block mb-1">State</label>
                   <input
                     type="text"
                     required
                     value={settingsForm.state}
                     onChange={(e) => setSettingsForm({ ...settingsForm, state: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[#8c7e77] block mb-1">Operating Hours</label>
+                  <input
+                    type="text"
+                    value={settingsForm.operatingHours}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, operatingHours: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none"
                   />
                 </div>
               </div>
-              <div className="flex justify-end">
-                <Button type="submit" variant="teal" size="sm" disabled={isUpdatingSettings || !selectedClinic}>
-                  {isUpdatingSettings ? "Saving to Supabase..." : "Save Clinic Changes"}
-                </Button>
+
+              <div className="pt-4 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={isUpdatingSettings}
+                  className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-8 py-2.5 text-xs font-medium cursor-pointer transition-colors shadow-xs"
+                >
+                  {isUpdatingSettings ? "Saving Changes..." : "Save Clinic Profile"}
+                </button>
               </div>
             </form>
-          </Card>
+          </div>
         </div>
       )}
+      </>
+      )}
 
-      {/* Invite Staff / Doctor Modal */}
+      {/* ------------------------------------------------------------------- */}
+      {/* INVITATION MODAL */}
+      {/* ------------------------------------------------------------------- */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <Card className="w-full max-w-md p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                <Mail className="w-4 h-4 text-teal-600" />
-                Invite Practitioner or Staff
-              </h3>
-              <button 
+        <div className="fixed inset-0 z-50 bg-[#1e1815]/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#ece6dd] shadow-xl max-w-md w-full p-6 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-[#ece6dd]">
+              <h3 className="font-editorial-serif text-2xl text-[#1e1815]">Invite Practitioner / Staff</h3>
+              <button
                 onClick={() => {
                   setShowInviteModal(false)
                   setLastInviteToken(null)
                 }}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-white text-sm"
+                className="text-[#8c7e77] hover:text-[#1e1815] p-1 rounded-full cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSendInvite} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-400 block mb-1">Invitee Email Address</label>
-                <input
-                  type="email"
-                  required
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="doctor@example.com"
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium"
-                />
-              </div>
-              <div>
-                <label className="text-slate-400 block mb-1">Assigned Clinic Role</label>
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium"
-                >
-                  <option value="DOCTOR">Doctor (Attending Physician)</option>
-                  <option value="RECEPTIONIST">Receptionist (Front Desk)</option>
-                  <option value="BILLING">Billing / Finance Staff</option>
-                  <option value="ADMIN">Clinic Co-Administrator</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    setShowInviteModal(false)
-                    setLastInviteToken(null)
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" variant="teal" size="sm" disabled={isInviting}>
-                  {isInviting ? "Generating..." : "Generate Secure Invite"}
-                </Button>
-              </div>
-            </form>
-
-            {/* Generated Token Alert */}
-            {lastInviteToken && (
-              <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-500/30 text-xs space-y-2 mt-3">
-                <span className="font-bold text-teal-800 dark:text-teal-200 block">
-                  Invitation Created in Supabase!
-                </span>
-                <p className="text-[11px] text-slate-500">
-                  Share this invitation token with the recipient:
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="p-1.5 bg-white dark:bg-slate-900 border border-teal-500/20 rounded font-mono text-[11px] flex-1 break-all select-all">
+            {lastInviteToken ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-[#4a6356]/10 border border-[#4a6356]/30 text-xs">
+                  <p className="font-bold text-[#4a6356] flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" /> Invitation Token Generated!
+                  </p>
+                  <p className="text-[#6e6059] mt-1">
+                    Share this secure invitation token with the practitioner or administrative colleague:
+                  </p>
+                  <div className="mt-3 p-2 bg-white rounded-lg border border-[#e4ded5] font-mono text-[11px] break-all select-all">
                     {lastInviteToken}
-                  </code>
-                  <Button variant="teal" size="sm" className="shrink-0 text-xs gap-1" onClick={() => copyToken(lastInviteToken)}>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => copyToken(lastInviteToken)}
+                    className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2 text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5"
+                  >
                     {hasCopiedToken ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    Copy
-                  </Button>
+                    {hasCopiedToken ? "Copied!" : "Copy Token"}
+                  </button>
+                  <button
+                    onClick={() => setLastInviteToken(null)}
+                    className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-4 py-2 text-xs font-medium cursor-pointer"
+                  >
+                    Invite Another
+                  </button>
                 </div>
               </div>
+            ) : (
+              <form onSubmit={handleSendInvite} className="space-y-4 text-xs font-editorial-sans">
+                <div>
+                  <label className="text-[#8c7e77] block mb-1">Recipient Professional Email</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="doctor@hospital.org"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[#8c7e77] block mb-1">Institutional Role</label>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[#e4ded5] bg-[#fbf9f5] font-medium focus:border-[#cb6440] outline-none cursor-pointer"
+                  >
+                    <option value="DOCTOR">Medical Doctor / Physician</option>
+                    <option value="CLINIC_ADMIN">Clinical Operations Administrator</option>
+                  </select>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowInviteModal(false)}
+                    className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-4 py-2 text-xs font-medium cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isInviting}
+                    className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2 text-xs font-medium cursor-pointer transition-colors shadow-xs"
+                  >
+                    {isInviting ? "Issuing Token..." : "Issue Invitation Token"}
+                  </button>
+                </div>
+              </form>
             )}
-          </Card>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* APPOINTMENT INSPECT MODAL */}
+      {/* ------------------------------------------------------------------- */}
+      {selectedAppointment && (
+        <div className="fixed inset-0 z-50 bg-[#1e1815]/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#ece6dd] shadow-xl max-w-lg w-full p-6 space-y-5 text-xs font-editorial-sans">
+            <div className="flex items-center justify-between pb-3 border-b border-[#ece6dd]">
+              <div>
+                <h3 className="font-editorial-serif text-2xl text-[#1e1815]">Encounter Record</h3>
+                <p className="text-[11px] font-mono text-[#8c7e77]">{selectedAppointment.bookingReference}</p>
+              </div>
+              <button
+                onClick={() => setSelectedAppointment(null)}
+                className="text-[#8c7e77] hover:text-[#1e1815] p-1 rounded-full cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-[#fbf9f5] border border-[#ece6dd] grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[#8c7e77] block text-[10px]">Patient</span>
+                  <span className="font-bold text-[#1e1815]">
+                    {selectedAppointment.patient?.profile.firstName} {selectedAppointment.patient?.profile.lastName}
+                  </span>
+                  <span className="block text-[10px] text-[#6e6059]">{selectedAppointment.patient?.profile.email}</span>
+                </div>
+                <div>
+                  <span className="text-[#8c7e77] block text-[10px]">Attending Physician</span>
+                  <span className="font-bold text-[#1e1815]">
+                    Dr. {selectedAppointment.doctor?.profile.firstName} {selectedAppointment.doctor?.profile.lastName}
+                  </span>
+                  <span className="block text-[10px] text-[#cb6440]">{selectedAppointment.doctor?.specialty}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-[#fbf9f5] border border-[#ece6dd]">
+                  <span className="text-[#8c7e77] block text-[10px]">Scheduled Time</span>
+                  <span className="font-medium text-[#1e1815]">
+                    {new Date(selectedAppointment.scheduledStart).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-[#fbf9f5] border border-[#ece6dd]">
+                  <span className="text-[#8c7e77] block text-[10px]">Visit Type & Fee</span>
+                  <span className="font-medium text-[#1e1815]">
+                    {selectedAppointment.visitType} • ${Number(selectedAppointment.consultationFee) || 50}
+                  </span>
+                </div>
+              </div>
+
+              {selectedAppointment.reasonForVisit && (
+                <div className="p-3 rounded-xl bg-[#fbf9f5] border border-[#ece6dd]">
+                  <span className="text-[#8c7e77] block text-[10px]">Reported Chief Complaint</span>
+                  <p className="text-[#1e1815] mt-1">{selectedAppointment.reasonForVisit}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-between items-center border-t border-[#ece6dd]">
+              <div className="flex gap-1.5">
+                {selectedAppointment.status !== "COMPLETED" && (
+                  <button
+                    onClick={() => handleUpdateClinicAppointmentStatus(selectedAppointment.id, "COMPLETED")}
+                    className="rounded-full bg-[#4a6356] hover:bg-[#3d5247] text-white px-4 py-1.5 text-xs font-medium cursor-pointer transition-colors"
+                  >
+                    Mark Completed
+                  </button>
+                )}
+                {selectedAppointment.status !== "CANCELLED" && (
+                  <button
+                    onClick={() => handleUpdateClinicAppointmentStatus(selectedAppointment.id, "CANCELLED")}
+                    className="rounded-full border border-[#e4ded5] text-[#b85633] hover:bg-[#ede6dc] px-4 py-1.5 text-xs font-medium cursor-pointer transition-colors"
+                  >
+                    Cancel Booking
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setSelectedAppointment(null)}
+                className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-4 py-1.5 text-xs font-medium cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </DashboardShell>

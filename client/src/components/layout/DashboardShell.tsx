@@ -1,10 +1,9 @@
 import React, { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { 
-  Activity, Bell, LogOut, Menu, X, Home
+  Bell, LogOut, Menu, X, ArrowLeft
 } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
-import { ThemeToggle } from "@/components/ui/ThemeToggle"
 
 export interface NavItem {
   id: string
@@ -27,7 +26,7 @@ interface DashboardShellProps {
 
 export function DashboardShell({
   roleTitle,
-  roleColor,
+  roleColor: _roleColor,
   userDisplayName,
   userSubtitle,
   userAvatar,
@@ -44,19 +43,12 @@ export function DashboardShell({
   const displaySubtitle = user ? `${user.role} • ${user.email}` : (userSubtitle || "MediSlot Account")
   const avatarSrc = userAvatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"
 
-  const badgeColor = {
-    sky: "bg-sky-500/10 text-sky-600 border-sky-200 dark:border-sky-800",
-    teal: "bg-teal-500/10 text-teal-600 border-teal-200 dark:border-teal-800",
-    emerald: "bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800",
-    purple: "bg-purple-500/10 text-purple-600 border-purple-200 dark:border-purple-800",
-  }[roleColor]
-
-  const activeColor = {
-    sky: "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 font-semibold border-r-4 border-sky-600",
-    teal: "bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 font-semibold border-r-4 border-teal-600",
-    emerald: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-semibold border-r-4 border-emerald-600",
-    purple: "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 font-semibold border-r-4 border-purple-600",
-  }[roleColor]
+  // Editorial role styling: Patient = Sage green, Doctor = Terracotta, Admin = Champagne gold
+  const roleBadgeStyle = user?.role === "DOCTOR"
+    ? "bg-[#cb6440]/10 text-[#cb6440] border-[#cb6440]/30"
+    : user?.role === "CLINIC_ADMIN" || user?.role === "PLATFORM_ADMIN"
+    ? "bg-[#8c6b3e]/10 text-[#8c6b3e] border-[#8c6b3e]/30"
+    : "bg-[#4a6356]/10 text-[#4a6356] border-[#4a6356]/30"
 
   const handleLogout = () => {
     logout()
@@ -64,64 +56,67 @@ export function DashboardShell({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-      {/* Top Bar */}
-      <header className="sticky top-0 z-30 h-16 border-b border-slate-200/80 bg-white/90 backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-900/90 flex items-center justify-between px-4 sm:px-6">
-        <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-[#fbf9f5] text-[#1e1815] font-editorial-sans flex flex-col selection:bg-[#ede4d5] selection:text-[#2a201e]">
+      
+      {/* Top Editorial Bar */}
+      <header className="sticky top-0 z-30 h-18 border-b border-[#ece6dd] bg-[#fbf9f5]/95 backdrop-blur-md flex items-center justify-between px-6 sm:px-10 lg:px-14">
+        
+        {/* Left: Mobile Toggle + medislot. Logo + Role Badge */}
+        <div className="flex items-center gap-4 sm:gap-6">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="md:hidden p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="md:hidden p-2 rounded-xl text-[#6e6059] hover:bg-[#ede6dc] transition-colors"
             aria-label="Toggle menu"
           >
-            {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {sidebarOpen ? <X className="w-5 h-5 text-[#1e1815]" /> : <Menu className="w-5 h-5 text-[#1e1815]" />}
           </button>
 
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-teal-500 flex items-center justify-center text-white shadow-sm">
-              <Activity className="w-4 h-4" />
-            </div>
-            <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
-              Medi<span className="text-teal-600 dark:text-teal-400">Slot</span>
+          <Link to="/" className="flex items-center gap-2 group">
+            <span className="font-editorial-serif text-3xl tracking-tight text-[#1e1815] font-normal">
+              medislot<span className="text-[#cb6440]">.</span>
             </span>
           </Link>
 
-          <span className={`hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${badgeColor}`}>
+          <span className={`hidden sm:inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider border ${roleBadgeStyle}`}>
             {roleTitle}
           </span>
         </div>
 
         {/* Top Right Actions */}
-        <div className="flex items-center gap-3">
-          {/* Authenticated RBAC Session Status */}
-          <div className="hidden lg:flex items-center gap-2 text-xs border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 bg-slate-50 dark:bg-slate-800/50">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
-              Role: <strong className="text-slate-900 dark:text-white">{user?.role || "GUEST"}</strong>
+        <div className="flex items-center gap-3 sm:gap-4">
+          
+          {/* Authenticated RBAC Session Status Indicator */}
+          <div className="hidden lg:flex items-center gap-2 text-xs border border-[#e4ded5] rounded-full px-3.5 py-1.5 bg-white shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-[#4a6356] animate-pulse" />
+            <span className="text-[11px] font-medium text-[#6e6059]">
+              Verified: <strong className="text-[#1e1815]">{user?.role || "GUEST"}</strong>
             </span>
           </div>
 
-          <ThemeToggle />
-
-          <button className="relative p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800">
+          {/* Notifications */}
+          <button 
+            className="relative p-2.5 rounded-full text-[#6e6059] hover:text-[#1e1815] hover:bg-[#ede6dc] transition-colors cursor-pointer"
+            aria-label="Notifications"
+          >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900" />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#cb6440] ring-2 ring-[#fbf9f5]" />
           </button>
 
-          {/* User Profile Thumbnail */}
-          <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200 dark:border-slate-800">
+          {/* User Profile Pill */}
+          <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-[#ece6dd]">
             <img
               src={avatarSrc}
               alt={displayName}
-              className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+              className="w-8 h-8 rounded-full object-cover border border-[#e4ded5]"
             />
             <div className="hidden sm:block text-left">
-              <p className="text-xs font-semibold text-slate-900 dark:text-white leading-tight">{displayName}</p>
-              <p className="text-[10px] text-slate-400 truncate max-w-[140px]">{displaySubtitle}</p>
+              <p className="text-xs font-bold text-[#1e1815] leading-tight">{displayName}</p>
+              <p className="text-[10px] text-[#8c7e77] truncate max-w-[140px] font-medium">{displaySubtitle}</p>
             </div>
             <button
               onClick={handleLogout}
               title="Sign Out"
-              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 ml-1 cursor-pointer"
+              className="p-2 text-[#8c7e77] hover:text-[#cb6440] rounded-full hover:bg-[#ede6dc] ml-1 transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -131,18 +126,19 @@ export function DashboardShell({
 
       {/* Main Layout Container */}
       <div className="flex flex-1">
+        
         {/* Sidebar */}
         <aside
           className={`
-            fixed inset-y-16 left-0 z-20 w-64 border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 
+            fixed inset-y-18 left-0 z-20 w-64 border-r border-[#ece6dd] bg-[#f8f5ee]
             transition-transform duration-200 md:static md:translate-x-0
             ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}
           `}
         >
-          <div className="flex flex-col h-full py-4 justify-between">
-            <div className="space-y-1 px-3">
-              <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                Workspace Menu
+          <div className="flex flex-col h-full py-5 justify-between">
+            <div className="space-y-1.5 px-3">
+              <p className="px-3 text-[10px] font-bold uppercase tracking-[1.3px] text-[#8c7e77] mb-3">
+                Clinical Navigation
               </p>
               {navItems.map((item) => {
                 const Icon = item.icon
@@ -155,16 +151,23 @@ export function DashboardShell({
                       setSidebarOpen(false)
                     }}
                     className={`
-                      w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-colors text-left cursor-pointer
-                      ${isActive ? activeColor : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"}
+                      w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all text-left cursor-pointer
+                      ${isActive 
+                        ? "bg-[#ede5d9] text-[#cb6440] font-semibold border-r-3 border-[#cb6440] shadow-2xs" 
+                        : "text-[#6e6059] hover:text-[#1e1815] hover:bg-[#efe8dc]/60 font-medium"
+                      }
                     `}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon className="w-4 h-4 shrink-0" />
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-[#cb6440]" : "text-[#8c7e77]"}`} />
                       <span>{item.label}</span>
                     </div>
                     {item.badge !== undefined && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                      <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+                        isActive 
+                          ? "bg-[#cb6440] text-white" 
+                          : "bg-[#e8e2d8] text-[#4a3e39]"
+                      }`}>
                         {item.badge}
                       </span>
                     )}
@@ -174,23 +177,23 @@ export function DashboardShell({
             </div>
 
             {/* Bottom link to landing page */}
-            <div className="px-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+            <div className="px-4 pt-4 border-t border-[#ece6dd] space-y-2">
               <Link
                 to="/"
-                className="flex items-center gap-2 text-xs text-slate-500 hover:text-teal-600 py-1.5"
+                className="flex items-center gap-2 text-xs text-[#6e6059] hover:text-[#cb6440] py-1.5 transition-colors font-medium"
               >
-                <Home className="w-4 h-4" />
-                <span>Return to Landing Page</span>
+                <ArrowLeft className="w-4 h-4" />
+                <span>Return to Hospital Home</span>
               </Link>
-              <div className="text-[10px] text-slate-400">
-                Phase Two: Supabase Auth Active
+              <div className="text-[10px] text-[#8c7e77] uppercase tracking-wider">
+                MediSlot Clinical Engine v2.4
               </div>
             </div>
           </div>
         </aside>
 
         {/* Content Area */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl overflow-x-hidden">
+        <main className="flex-1 p-5 sm:p-8 lg:p-10 max-w-7xl overflow-x-hidden">
           {children}
         </main>
       </div>

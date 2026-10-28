@@ -82,8 +82,8 @@ export function LandingPage() {
       a: "The Patient Health Vault includes an educational AI translation feature that converts high-complexity clinical metrics (like HbA1c, eGFR, Dyslipidemia) into 6th-grade simple English, with explanations of why doctors check them and lifestyle questions to ask at consultations."
     },
     {
-      q: "Is patient medical data secure and HIPAA-aligned?",
-      a: "Yes. MediSlot enforces strict multi-tenant boundaries using Supabase Row-Level Security (RLS), encrypted object storage for diagnostics, and immutable cryptographic audit trails recording every clinician access event."
+      q: "How is patient medical data protected?",
+      a: "Yes. MediSlot enforces strict multi-tenant boundaries using Supabase Row-Level Security (RLS), encrypted private object storage for diagnostics, and comprehensive audit logs recording every clinician access event."
     },
     {
       q: "Can hospital administrators manage multiple clinics and staff?",
@@ -125,7 +125,7 @@ export function LandingPage() {
             </h1>
 
             <p className="text-base sm:text-lg leading-relaxed text-[#4a3e39] max-w-lg font-editorial-sans">
-              MediSlot is an accredited modern healthcare platform providing real-time doctor scheduling, encrypted clinical records, and physician-supervised AI assistance.
+              MediSlot is an advanced healthcare coordination platform providing real-time doctor scheduling, encrypted clinical records, and physician-supervised AI assistance.
             </p>
 
             <div>
@@ -156,10 +156,14 @@ export function LandingPage() {
         </div>
 
         {/* LOWER HERO GRID: Stats (Left 2-Cols) + Doctor Search & Doctor Cards (Right) */}
-        <div className="mt-8 pt-8 border-t border-[#ece6dd] grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
+        <div id="doctors" className="mt-8 pt-8 border-t border-[#ece6dd] grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start scroll-mt-24">
           
-          {/* Left: 2x2 Hospital Statistics Grid */}
-          <div className="lg:col-span-4 grid grid-cols-2 gap-x-6 gap-y-8 pt-2">
+          {/* Left: 2x2 Hospital Statistics Grid with Explicit Demo Label */}
+          <div className="lg:col-span-4 grid grid-cols-2 gap-x-6 gap-y-7 pt-1">
+            <div className="col-span-2 text-[10px] uppercase tracking-[1.3px] text-[#8c7e77] font-semibold">
+              Simulated Clinical Network (Demo)
+            </div>
+
             <div>
               <p className="font-editorial-serif text-4xl sm:text-5xl text-[#1e1815] font-normal leading-none mb-1.5">
                 1,250+
@@ -195,13 +199,27 @@ export function LandingPage() {
                 Clinical Care Rating
               </p>
             </div>
+
+            <p className="col-span-2 text-[10px] text-[#8c7e77] leading-tight italic pt-1">
+              * Demonstration showcase figures · 11 verified physicians active in local database
+            </p>
           </div>
 
           {/* Right: Wide Search Bar Pill + Horizontal Doctor Cards */}
           <div className="lg:col-span-8 flex flex-col space-y-4">
             
             {/* Wide Pill Search Bar */}
-            <div className="w-full bg-white rounded-full border border-[#e4ded5] shadow-xs px-4 sm:px-5 py-2 flex items-center gap-3">
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault()
+                const match = featuredDoctors.find(d => 
+                  d.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  d.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+                handleOpenBooking(match?.id)
+              }}
+              className="w-full bg-white rounded-full border border-[#e4ded5] shadow-xs px-4 sm:px-5 py-2 flex items-center gap-3"
+            >
               <Search className="w-5 h-5 text-[#8c7e77] shrink-0" />
               <input
                 type="text"
@@ -211,13 +229,12 @@ export function LandingPage() {
                 className="w-full bg-transparent text-sm text-[#1e1815] placeholder:text-[#8c7e77] focus:outline-none font-editorial-sans"
               />
               <button
-                type="button"
-                onClick={() => handleOpenBooking()}
+                type="submit"
                 className="shrink-0 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 sm:px-6 py-2 text-sm font-medium transition-colors cursor-pointer"
               >
                 Find doctors
               </button>
-            </div>
+            </form>
 
             {/* Horizontal Doctor Profile Cards (Matching Screenshot) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -253,10 +270,10 @@ export function LandingPage() {
                       <div className="flex items-center gap-1.5 text-xs text-[#c5a880] font-semibold mt-1">
                         <span>Patient ratings</span>
                         <span className="flex text-amber-500 text-xs">★★★★★</span>
-                        <span className="text-[#6e6059] text-[11px] font-normal">({doc.rating})</span>
+                        <span className="text-[#6e6059] text-[11px] font-normal">({doc.rating} · Demo)</span>
                       </div>
                       <p className="text-xs text-[#6e6059] mt-1.5">
-                        Real-time availability: <span className="text-[#4a6b5d] font-semibold">{doc.nextAvailable}</span>
+                        Demo availability: <span className="text-[#4a6b5d] font-semibold">{doc.nextAvailable}</span>
                       </p>
                     </div>
                   </div>
@@ -272,7 +289,7 @@ export function LandingPage() {
       {/* ========================================================= */}
       {/* 3. HOSPITAL CLINICAL DEPARTMENTS & SPECIALTIES */}
       {/* ========================================================= */}
-      <section id="specialties" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] max-w-7xl mx-auto w-full">
+      <section id="specialties" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] max-w-7xl mx-auto w-full scroll-mt-20">
         <div className="space-y-12">
           
           <div className="text-center max-w-2xl mx-auto space-y-3">
@@ -321,7 +338,7 @@ export function LandingPage() {
       {/* ========================================================= */}
       {/* 4. THREE-STEP APPOINTMENT BOOKING PROCESS */}
       {/* ========================================================= */}
-      <section id="how-it-works" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] bg-[#f5f1e9]/60 dark:bg-[#1a1714]/40">
+      <section id="about" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] bg-[#f5f1e9]/60 dark:bg-[#1a1714]/40 scroll-mt-20">
         <div className="max-w-7xl mx-auto space-y-12">
           
           <div className="text-center max-w-2xl mx-auto space-y-3">
@@ -343,7 +360,7 @@ export function LandingPage() {
               </span>
               <h3 className="font-bold text-lg text-[#2a201e] dark:text-[#fbf9f5]">Search & Select</h3>
               <p className="text-xs text-[#8b7566] dark:text-[#c4b5a8] leading-relaxed">
-                Filter accredited doctors by specialty, medical facility, consultation fee, and verified patient ratings.
+                Filter verified doctors by specialty, medical facility, consultation fee, and patient ratings.
               </p>
             </div>
 

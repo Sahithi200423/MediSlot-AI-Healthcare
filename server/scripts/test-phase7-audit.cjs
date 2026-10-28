@@ -107,6 +107,18 @@ async function registerAndVerifyUser(email, firstName, lastName, role = 'PATIENT
     profile = await prisma.profile.create({
       data: { id: userId, email, firstName, lastName, role }
     });
+  } else if (profile && role && profile.role !== role) {
+    profile = await prisma.profile.update({
+      where: { id: userId },
+      data: { role }
+    });
+    const lRes = await request(`${API_URL}/auth/login`, {
+      method: 'POST',
+      body: { email, password: 'Password123!' }
+    });
+    if (lRes.body?.data?.token) {
+      token = lRes.body.data.token;
+    }
   }
 
   return { token, userId, profile };
