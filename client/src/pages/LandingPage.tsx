@@ -1,9 +1,9 @@
 import { useState, lazy, Suspense } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
-  Search, Clock, Star, Sparkles,
+  Search, Sparkles,
   ChevronDown, Bot, HeartPulse,
-  Stethoscope, Brain, Eye, Baby, Bone, Activity, FileText, CalendarCheck
+  Stethoscope, Brain, Eye, Baby, Bone, Activity, FileText
 } from "lucide-react"
 import { Navbar } from "@/components/layout/Navbar"
 import { Footer } from "@/components/layout/Footer"
@@ -13,7 +13,6 @@ import { InteractiveBookingModal } from "@/components/booking/InteractiveBooking
 const BioCellSculpture = lazy(() => import("@/components/3d/BioCellSculpture"))
 
 export function LandingPage() {
-  const [selectedSpecialty, setSelectedSpecialty] = useState("All Specialties")
   const [searchQuery, setSearchQuery] = useState("")
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
@@ -111,77 +110,42 @@ export function LandingPage() {
       />
 
       {/* ========================================================= */}
-      {/* 1. EDITORIAL TWO-COLUMN HERO WITH 3D BIO-SCULPTURE */}
+      {/* 1. HERO COMPOSITION MATCHING APPROVED SCREENSHOT */}
       {/* ========================================================= */}
-      <section className="relative w-full max-w-[1920px] mx-auto px-6 sm:px-12 lg:px-16 pt-8 pb-16 lg:py-20 overflow-hidden border-b border-[#dcd3c6] dark:border-[#362f2a]">
-        <div className="grid grid-cols-1 lg:grid-cols-[1.12fr_1fr] items-center gap-12 lg:gap-8 min-h-[580px]">
+      <section className="relative w-full max-w-7xl mx-auto px-6 sm:px-10 lg:px-14 pt-8 sm:pt-12 pb-16">
+        
+        {/* TOP HERO GRID: Headline & Description + 3D Biological Sculpture */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center min-h-[460px]">
           
-          {/* Left Column: Hospital Editorial Story */}
-          <div className="flex flex-col justify-center space-y-7 z-10">
-            
-            {/* Eyebrow */}
-            <div className="flex items-center gap-3 text-[10px] uppercase tracking-[1.4px] text-[#8b7566] dark:text-[#c4b5a8] font-semibold">
-              <span className="w-6 h-[1px] bg-[#b58368]"></span>
-              <span>A CLINICAL PLATFORM WITH A HUMAN TOUCH</span>
-            </div>
-
-            {/* Oversized Instrument Serif Headline */}
-            <h1 className="font-editorial-serif text-5xl sm:text-6xl lg:text-[76px] font-normal tracking-[-0.035em] leading-[0.98] text-[#2a201e] dark:text-[#fbf9f5] m-0">
-              A little care.<br />
-              A big <em className="text-[#b66143] dark:text-[#f07e54] italic font-editorial-serif font-normal">possibility.</em>
+          {/* Left Hero Column: Headline, Bio, and Call to Action */}
+          <div className="lg:col-span-6 flex flex-col justify-center space-y-6 z-10">
+            <h1 className="font-editorial-serif text-5xl sm:text-6xl lg:text-[4.2rem] font-normal tracking-tight leading-[1.08] text-[#1e1815]">
+              ‘Where clinical excellence<br />
+              meets human dignity.’
             </h1>
 
-            {/* Introduction Copy */}
-            <p className="text-sm sm:text-base text-[#8b7566] dark:text-[#c4b5a8] leading-relaxed max-w-xl font-editorial-sans">
-              We turn clinical complexity into clarity. Thoughtful medicine, digital patient experiences, and physician-supervised diagnostic intelligence designed for modern healthcare pavilions.
+            <p className="text-base sm:text-lg leading-relaxed text-[#4a3e39] max-w-lg font-editorial-sans">
+              MediSlot is an accredited modern healthcare platform providing real-time doctor scheduling, encrypted clinical records, and physician-supervised AI assistance.
             </p>
 
-            {/* Conversation Callout (Soft Spot Inspired) */}
-            <div className="flex items-center gap-4 pt-2">
-              <span className="w-11 h-11 rounded-full bg-[#ede5d9] dark:bg-[#2b2520] text-[#2a201e] dark:text-[#fbf9f5] flex items-center justify-center text-xl shrink-0 font-sans shadow-xs">
-                ↗
-              </span>
-              <div>
-                <span className="text-[9px] uppercase tracking-[1.3px] text-[#8b7566] dark:text-[#c4b5a8] font-bold block">
-                  GOT HEALTH QUESTIONS?
-                </span>
-                <p className="text-sm sm:text-base font-semibold text-[#2a201e] dark:text-[#fbf9f5] m-0">
-                  Let’s connect with an accredited specialist.
-                </p>
-              </div>
-            </div>
-
-            {/* Primary Actions */}
-            <div className="flex flex-wrap items-center gap-4 pt-4">
+            <div>
               <button
                 type="button"
                 onClick={() => handleOpenBooking()}
-                className="pill-button !bg-[#e17145] !text-white !border-[#b66143] hover:!bg-[#b66143] text-sm !px-6 !py-3 font-semibold shadow-sm"
+                className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-8 py-3.5 text-sm sm:text-base font-medium shadow-md shadow-[#cb6440]/15 transition-all cursor-pointer active:scale-98"
               >
-                <CalendarCheck className="w-4 h-4" />
-                <span>Book an Appointment</span>
+                Book Consultation
               </button>
-
-              <a href="#doctors">
-                <button
-                  type="button"
-                  className="pill-button text-sm !px-6 !py-3 font-semibold text-[#4a6b5d] dark:text-[#99aa77] border-[#4a6b5d]/40 hover:border-[#4a6b5d]"
-                >
-                  <Search className="w-4 h-4" />
-                  <span>Search Hospital Faculty</span>
-                </button>
-              </a>
             </div>
-
           </div>
 
-          {/* Right Column: Interactive 3D Bio-Cellular Sculpture */}
-          <div className="w-full h-full min-h-[460px] lg:min-h-[560px] relative flex items-center justify-center">
+          {/* Right Hero Column: Interactive Three.js Healthcare Sculpture */}
+          <div className="lg:col-span-6 w-full h-[380px] sm:h-[440px] lg:h-[480px] relative flex items-center justify-center">
             <Suspense 
               fallback={
-                <div className="w-full h-[460px] flex flex-col items-center justify-center gap-3 text-[#8b7566]">
-                  <div className="w-12 h-12 rounded-full border-2 border-[#4a6b5d] border-t-transparent animate-spin" />
-                  <span className="text-xs uppercase tracking-wider font-editorial-sans">Initializing Cellular Model...</span>
+                <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-[#8b7566]">
+                  <div className="w-10 h-10 rounded-full border-2 border-[#cb6440] border-t-transparent animate-spin" />
+                  <span className="text-xs uppercase tracking-wider font-editorial-sans">Rendering biological model...</span>
                 </div>
               }
             >
@@ -191,151 +155,118 @@ export function LandingPage() {
 
         </div>
 
-        {/* ========================================================= */}
-        {/* EDITORIAL TRUST NUMBERS STRIP */}
-        {/* ========================================================= */}
-        <div className="pt-16 grid grid-cols-2 lg:grid-cols-4 gap-8 text-center border-t border-[#dcd3c6] dark:border-[#362f2a] mt-12">
-          <div className="space-y-1">
-            <p className="font-editorial-serif text-4xl sm:text-5xl text-[#2a201e] dark:text-[#fbf9f5] tracking-tight">99.8%</p>
-            <p className="text-[11px] uppercase tracking-[1.2px] text-[#8b7566] dark:text-[#c4b5a8] font-medium">Uptime & Scheduling SLA</p>
-          </div>
-          <div className="space-y-1">
-            <p className="font-editorial-serif text-4xl sm:text-5xl text-[#4a6b5d] dark:text-[#99aa77] tracking-tight">15,000+</p>
-            <p className="text-[11px] uppercase tracking-[1.2px] text-[#8b7566] dark:text-[#c4b5a8] font-medium">Consultations Reserved</p>
-          </div>
-          <div className="space-y-1">
-            <p className="font-editorial-serif text-4xl sm:text-5xl text-[#e17145] tracking-tight">42%</p>
-            <p className="text-[11px] uppercase tracking-[1.2px] text-[#8b7566] dark:text-[#c4b5a8] font-medium">Fewer Missed Visits (ML)</p>
-          </div>
-          <div className="space-y-1">
-            <p className="font-editorial-serif text-4xl sm:text-5xl text-[#2a201e] dark:text-[#fbf9f5] tracking-tight">4.95 / 5</p>
-            <p className="text-[11px] uppercase tracking-[1.2px] text-[#8b7566] dark:text-[#c4b5a8] font-medium">Verified Patient Rating</p>
-          </div>
-        </div>
-
-      </section>
-
-      {/* ========================================================= */}
-      {/* 2. FIND ACCREDITED DOCTORS & CLINIC SEARCH */}
-      {/* ========================================================= */}
-      <section id="doctors" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] bg-[#f5f1e9]/60 dark:bg-[#1a1714]/40">
-        <div className="max-w-7xl mx-auto space-y-12">
+        {/* LOWER HERO GRID: Stats (Left 2-Cols) + Doctor Search & Doctor Cards (Right) */}
+        <div className="mt-8 pt-8 border-t border-[#ece6dd] grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
           
-          <div className="text-center max-w-2xl mx-auto space-y-3">
-            <span className="text-[10px] uppercase tracking-[1.4px] text-[#4a6b5d] dark:text-[#99aa77] font-bold">
-              ACCREDITED PRACTITIONER DIRECTORY
-            </span>
-            <h2 className="font-editorial-serif text-4xl sm:text-5xl text-[#2a201e] dark:text-[#fbf9f5] tracking-[-0.02em]">
-              Find Board-Certified Specialists
-            </h2>
-            <p className="text-sm text-[#8b7566] dark:text-[#c4b5a8]">
-              Reserve verified consultation hours across medical specialties and hospital pavilions.
-            </p>
-          </div>
+          {/* Left: 2x2 Hospital Statistics Grid */}
+          <div className="lg:col-span-4 grid grid-cols-2 gap-x-6 gap-y-8 pt-2">
+            <div>
+              <p className="font-editorial-serif text-4xl sm:text-5xl text-[#1e1815] font-normal leading-none mb-1.5">
+                1,250+
+              </p>
+              <p className="text-xs text-[#6e6059] font-editorial-sans font-medium">
+                Board Certified Doctors
+              </p>
+            </div>
 
-          {/* Search & Filter Bar */}
-          <div className="bg-[#fbf9f5] dark:bg-[#141210] p-4 rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] shadow-xs max-w-4xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              
-              <div className="relative flex items-center">
-                <Search className="absolute left-3.5 w-4 h-4 text-[#8b7566]" />
-                <input
-                  type="text"
-                  placeholder="Doctor, pavilion, or condition..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white dark:bg-[#1e1a16] rounded-xl pl-10 pr-3 py-2.5 text-xs font-editorial-sans border border-[#dcd3c6] dark:border-[#362f2a] focus:outline-none focus:border-[#4a6b5d] text-[#2a201e] dark:text-[#f5f1e9]"
-                />
-              </div>
+            <div>
+              <p className="font-editorial-serif text-4xl sm:text-5xl text-[#1e1815] font-normal leading-none mb-1.5">
+                98.4%
+              </p>
+              <p className="text-xs text-[#6e6059] font-editorial-sans font-medium">
+                Patient Satisfaction
+              </p>
+            </div>
 
-              <div className="relative flex items-center">
-                <Stethoscope className="absolute left-3.5 w-4 h-4 text-[#8b7566]" />
-                <select
-                  value={selectedSpecialty}
-                  onChange={(e) => setSelectedSpecialty(e.target.value)}
-                  className="w-full bg-white dark:bg-[#1e1a16] rounded-xl pl-10 pr-8 py-2.5 text-xs font-editorial-sans border border-[#dcd3c6] dark:border-[#362f2a] focus:outline-none focus:border-[#4a6b5d] text-[#2a201e] dark:text-[#f5f1e9] appearance-none cursor-pointer"
-                >
-                  <option>All Specialties</option>
-                  {specialties.map((s) => (
-                    <option key={s.name} value={s.name}>{s.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 w-4 h-4 text-[#8b7566] pointer-events-none" />
-              </div>
+            <div>
+              <p className="font-editorial-serif text-4xl sm:text-5xl text-[#1e1815] font-normal leading-none mb-1.5">
+                45+
+              </p>
+              <p className="text-xs text-[#6e6059] font-editorial-sans font-medium">
+                Specialty Clinics
+              </p>
+            </div>
 
-              <div>
-                <button
-                  type="button"
-                  onClick={() => handleOpenBooking()}
-                  className="pill-button w-full !bg-[#4a6b5d] !text-white !border-[#365246] hover:!bg-[#365246] text-xs font-semibold justify-center shadow-xs"
-                >
-                  <CalendarCheck className="w-4 h-4" />
-                  <span>Search Availability</span>
-                </button>
-              </div>
-
+            <div>
+              <p className="font-editorial-serif text-4xl sm:text-5xl text-[#1e1815] font-normal leading-none mb-1.5">
+                4.9★
+              </p>
+              <p className="text-xs text-[#6e6059] font-editorial-sans font-medium">
+                Clinical Care Rating
+              </p>
             </div>
           </div>
 
-          {/* Featured Doctors Profile Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {featuredDoctors.map((doc) => (
-              <div
-                key={doc.id}
-                className="bg-[#fbf9f5] dark:bg-[#141210] rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] p-6 flex flex-col justify-between hover:shadow-md transition-shadow group"
+          {/* Right: Wide Search Bar Pill + Horizontal Doctor Cards */}
+          <div className="lg:col-span-8 flex flex-col space-y-4">
+            
+            {/* Wide Pill Search Bar */}
+            <div className="w-full bg-white rounded-full border border-[#e4ded5] shadow-xs px-4 sm:px-5 py-2 flex items-center gap-3">
+              <Search className="w-5 h-5 text-[#8c7e77] shrink-0" />
+              <input
+                type="text"
+                placeholder="Search to find specialists, departments, or conditions..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-transparent text-sm text-[#1e1815] placeholder:text-[#8c7e77] focus:outline-none font-editorial-sans"
+              />
+              <button
+                type="button"
+                onClick={() => handleOpenBooking()}
+                className="shrink-0 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 sm:px-6 py-2 text-sm font-medium transition-colors cursor-pointer"
               >
-                <div className="space-y-4">
-                  <div className="flex items-start gap-4">
+                Find doctors
+              </button>
+            </div>
+
+            {/* Horizontal Doctor Profile Cards (Matching Screenshot) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {featuredDoctors
+                .filter(d => 
+                  searchQuery === "" || 
+                  d.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  d.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  d.clinic.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+                .slice(0, 2)
+                .map((doc) => (
+                  <div
+                    key={doc.id}
+                    onClick={() => handleOpenBooking(doc.id)}
+                    className="bg-white rounded-2xl border border-[#e8e2d8] p-4 flex items-center gap-4 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+                  >
                     <img
                       src={doc.avatar}
                       alt={doc.name}
-                      className="w-16 h-16 rounded-2xl object-cover border border-[#dcd3c6] dark:border-[#362f2a] shadow-xs"
+                      className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl object-cover border border-[#ebe4da] shrink-0 group-hover:scale-102 transition-transform"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 text-[#c5a880] text-xs font-semibold">
-                        <Star className="w-3.5 h-3.5 fill-[#c5a880]" />
-                        <span>{doc.rating}</span>
-                        <span className="text-[#8b7566] font-normal">({doc.reviews})</span>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-[#1e1815] truncate group-hover:text-[#cb6440] transition-colors">
+                          {doc.name}
+                        </h3>
+                        <span className="text-[#8c7e77] text-base leading-none px-1">⋮</span>
                       </div>
-                      <h3 className="text-base font-bold text-[#2a201e] dark:text-[#fbf9f5] truncate mt-0.5 group-hover:text-[#e17145] transition-colors">
-                        {doc.name}
-                      </h3>
-                      <p className="text-xs font-medium text-[#4a6b5d] dark:text-[#99aa77]">{doc.specialty}</p>
-                      <p className="text-[11px] text-[#8b7566] truncate mt-0.5">{doc.clinic}</p>
+                      <p className="text-xs text-[#6e6059] truncate mt-0.5">
+                        {doc.specialty}
+                      </p>
+                      <div className="flex items-center gap-1.5 text-xs text-[#c5a880] font-semibold mt-1">
+                        <span>Patient ratings</span>
+                        <span className="flex text-amber-500 text-xs">★★★★★</span>
+                        <span className="text-[#6e6059] text-[11px] font-normal">({doc.rating})</span>
+                      </div>
+                      <p className="text-xs text-[#6e6059] mt-1.5">
+                        Real-time availability: <span className="text-[#4a6b5d] font-semibold">{doc.nextAvailable}</span>
+                      </p>
                     </div>
                   </div>
+                ))}
+            </div>
 
-                  <div className="pt-3 border-t border-[#dcd3c6]/60 dark:border-[#362f2a] grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-[10px] uppercase text-[#8b7566] font-medium tracking-wider">Experience</p>
-                      <p className="font-semibold text-[#2a201e] dark:text-[#fbf9f5] mt-0.5">{doc.experience}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase text-[#8b7566] font-medium tracking-wider">Consultation</p>
-                      <p className="font-semibold text-[#2a201e] dark:text-[#fbf9f5] mt-0.5">{doc.fee} / visit</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-[#dcd3c6]/60 dark:border-[#362f2a] flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-xs text-[#4a6b5d] dark:text-[#99aa77] font-semibold">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>{doc.nextAvailable}</span>
-                  </div>
-                  
-                  <button
-                    type="button"
-                    onClick={() => handleOpenBooking(doc.id)}
-                    className="pill-button !py-1.5 !px-3.5 text-xs font-semibold !border-[#4a6b5d]/40 text-[#4a6b5d] dark:text-[#99aa77] hover:!bg-[#4a6b5d]/10"
-                  >
-                    Reserve Slot
-                  </button>
-                </div>
-              </div>
-            ))}
           </div>
 
         </div>
+
       </section>
 
       {/* ========================================================= */}

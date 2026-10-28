@@ -58,9 +58,8 @@ export default function BioCellSculpture() {
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-    // --- Primary Bio-Cellular Organic Form ---
-    // Mathematically displaced organic cellular membrane representing vital biological harmony
-    const baseGeometry = new THREE.SphereGeometry(1, 128, 96);
+    // --- Primary Bio-Cellular Organic Form (Pearl-White Alabaster Translucent Membrane) ---
+    const baseGeometry = new THREE.SphereGeometry(1.32, 128, 96);
     const position = baseGeometry.attributes.position;
     for (let i = 0; i < position.count; i++) {
       const x = position.getX(i);
@@ -69,72 +68,89 @@ export default function BioCellSculpture() {
       const angle = Math.atan2(y, x);
       const radial = Math.hypot(x, y);
 
-      // Biological 5-lobed cellular undulation with smooth gradient attenuation
-      const cellUndulation = 1 + 0.26 * Math.cos(5 * angle) * Math.pow(radial, 2.0);
-      const depthFlattening = 0.58;
+      // Biological undulating cellular fold matching screenshot
+      const cellUndulation = 1 + 0.16 * Math.cos(3 * angle + 0.4) * Math.min(1.2, radial) + 0.08 * Math.sin(2 * angle);
+      const depthFlattening = 0.60 + 0.12 * Math.cos(radial * 1.5);
       position.setXYZ(i, x * cellUndulation, y * cellUndulation, z * depthFlattening);
     }
     baseGeometry.computeVertexNormals();
 
-    // Clinical Sage & Jade Porcelain physical material
+    // Pearl-White Alabaster Translucent Biological Membrane Material
     const bioMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0x4a6b5d, // Hospital clinical sage
-      roughness: 0.32,
-      metalness: 0.06,
-      envMapIntensity: 0.72,
-      clearcoat: 0.65,
-      clearcoatRoughness: 0.28,
-      sheen: 0.35,
-      sheenColor: new THREE.Color(0xd1fae5), // Gentle opalescent healthcare glow
-      sheenRoughness: 0.5,
+      color: 0xfcfbfa, // Translucent pearl white
+      roughness: 0.18,
+      metalness: 0.03,
+      transmission: 0.72, // Glass-like cellular transmission revealing nucleus
+      thickness: 1.6,
+      ior: 1.44,
+      clearcoat: 0.92,
+      clearcoatRoughness: 0.12,
+      attenuationColor: new THREE.Color(0xf6eed8),
+      attenuationDistance: 2.4,
+      transparent: true,
+      opacity: 0.92,
+      side: THREE.DoubleSide,
+      envMapIntensity: 1.1,
     });
 
     const sculptureGroup = new THREE.Group();
     const cellMesh = new THREE.Mesh(baseGeometry, bioMaterial);
-    cellMesh.scale.setScalar(1.32);
     sculptureGroup.add(cellMesh);
 
-    // Inner vital cellular core (subtle nucleus glow)
-    const nucleusGeometry = new THREE.IcosahedronGeometry(0.55, 3);
+    // Warm Golden Nucleus in Center
+    const nucleusGeometry = new THREE.SphereGeometry(0.72, 64, 64);
     const nucleusMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xe17145, // Warm terracotta vitality core
-      roughness: 0.2,
-      metalness: 0.1,
-      clearcoat: 1.0,
-      transmission: 0.1,
-      opacity: 0.85,
-      transparent: true,
+      color: 0xdfa544, // Warm radiant amber-gold
+      roughness: 0.22,
+      metalness: 0.85,
+      clearcoat: 0.95,
+      clearcoatRoughness: 0.1,
+      reflectivity: 0.9,
+      envMapIntensity: 1.6,
     });
     const nucleusMesh = new THREE.Mesh(nucleusGeometry, nucleusMaterial);
     sculptureGroup.add(nucleusMesh);
 
-    sculptureGroup.rotation.set(-0.16, -0.32, 0.14);
-    scene.add(sculptureGroup);
+    // Thin Orbital Ring with Golden Spheres (matching screenshot)
+    const ringGroup = new THREE.Group();
+    
+    // Orbital Wire 1 (Inclined ellipse)
+    const ringGeo1 = new THREE.TorusGeometry(2.36, 0.015, 24, 160);
+    const ringMat = new THREE.MeshPhysicalMaterial({
+      color: 0xd6c2a4, // Champagne gold wire
+      metalness: 0.7,
+      roughness: 0.3,
+      clearcoat: 0.8,
+    });
+    const ringMesh1 = new THREE.Mesh(ringGeo1, ringMat);
+    ringMesh1.rotation.set(Math.PI / 3.4, Math.PI / 6, 0);
+    ringGroup.add(ringMesh1);
 
-    // --- Orbiting Metabolic Nodes (Circulatory Vitality Pearls) ---
-    const orbGeometry = new THREE.SphereGeometry(1, 36, 32);
+    // Orbital Wire 2 (Secondary delicate cross ring)
+    const ringGeo2 = new THREE.TorusGeometry(2.46, 0.012, 24, 160);
+    const ringMesh2 = new THREE.Mesh(ringGeo2, ringMat);
+    ringMesh2.rotation.set(-Math.PI / 4, -Math.PI / 5, Math.PI / 8);
+    ringGroup.add(ringMesh2);
 
-    // Pearl 1: Oxygenating Pearl (Soft Ivory / Champagne)
-    const pearlMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xfbf9f5,
-      roughness: 0.18,
-      metalness: 0.22,
+    // Gold Spheres on Orbit
+    const pearlGeo = new THREE.SphereGeometry(0.12, 32, 32);
+    const goldPearlMat = new THREE.MeshPhysicalMaterial({
+      color: 0xdfa544,
+      metalness: 0.85,
+      roughness: 0.2,
       clearcoat: 1.0,
     });
-    const pearlOrb = new THREE.Mesh(orbGeometry, pearlMaterial);
-    pearlOrb.scale.setScalar(0.2);
-    scene.add(pearlOrb);
+    const pearl1 = new THREE.Mesh(pearlGeo, goldPearlMat);
+    const pearl2 = new THREE.Mesh(pearlGeo, goldPearlMat);
+    const pearl3 = new THREE.Mesh(pearlGeo, goldPearlMat);
+    ringGroup.add(pearl1);
+    ringGroup.add(pearl2);
+    ringGroup.add(pearl3);
 
-    // Pearl 2: Arterial Hematology Node (Deep Wine / Crimson)
-    const wineMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0x762f31,
-      roughness: 0.24,
-      metalness: 0.12,
-      clearcoat: 0.7,
-    });
-    const wineOrb = new THREE.Mesh(orbGeometry, wineMaterial);
-    wineOrb.scale.setScalar(0.13);
-    scene.add(wineOrb);
+    sculptureGroup.add(ringGroup);
+
+    sculptureGroup.rotation.set(-0.12, -0.28, 0.1);
+    scene.add(sculptureGroup);
 
     // Animation & physics loop state
     let frame = 0;
@@ -163,22 +179,38 @@ export default function BioCellSculpture() {
     };
 
     const draw = (time: number) => {
-      // Harmonic Lissajous biological trajectories for orbiting cellular nodes
-      pearlOrb.position.set(
-        Math.cos(time * 0.42 + 0.6) * 1.96,
-        Math.sin(time * 0.42 + 0.6) * 1.54,
-        Math.sin(time * 0.42 + 0.6) * 0.88
+      // Rotate orbital rings and position golden spheres along the orbit trajectory
+      ringGroup.rotation.y = time * 0.12;
+      ringGroup.rotation.x = Math.sin(time * 0.18) * 0.08;
+
+      // Position pearls on orbital trajectories matching screenshot
+      const a1 = time * 0.5;
+      const r1 = 2.36;
+      pearl1.position.set(
+        Math.cos(a1) * r1,
+        Math.sin(a1) * r1 * Math.sin(Math.PI / 3.4),
+        Math.sin(a1) * r1 * Math.cos(Math.PI / 3.4)
       );
-      wineOrb.position.set(
-        Math.cos(time * 0.35 + 3.4) * 2.05,
-        Math.sin(time * 0.35 + 3.4) * 1.62,
-        Math.cos(time * 0.35 + 3.4) * 0.58
+
+      const a2 = a1 + Math.PI;
+      pearl2.position.set(
+        Math.cos(a2) * r1,
+        Math.sin(a2) * r1 * Math.sin(Math.PI / 3.4),
+        Math.sin(a2) * r1 * Math.cos(Math.PI / 3.4)
+      );
+
+      const a3 = -time * 0.38 + 1.2;
+      const r2 = 2.46;
+      pearl3.position.set(
+        Math.cos(a3) * r2 * Math.cos(-Math.PI / 4),
+        Math.sin(a3) * r2,
+        Math.cos(a3) * r2 * Math.sin(-Math.PI / 4)
       );
 
       // Subtle vital respiration heartbeat pulse
-      sculptureGroup.rotation.set(-0.16 + Math.sin(time * 0.4) * 0.06, tilt, rotation);
-      sculptureGroup.position.y = Math.sin(time * 0.8) * 0.09;
-      const pulse = 1 + Math.sin(time * 1.6) * 0.015 + Math.sin(bounce) * Math.min(bounce * 0.016, 0.06);
+      sculptureGroup.rotation.set(-0.12 + Math.sin(time * 0.35) * 0.05, tilt, rotation);
+      sculptureGroup.position.y = Math.sin(time * 0.7) * 0.08;
+      const pulse = 1 + Math.sin(time * 1.5) * 0.012 + Math.sin(bounce) * Math.min(bounce * 0.015, 0.05);
       sculptureGroup.scale.setScalar(pulse);
 
       renderer.render(scene, camera);
@@ -299,11 +331,13 @@ export default function BioCellSculpture() {
 
       baseGeometry.dispose();
       nucleusGeometry.dispose();
-      orbGeometry.dispose();
+      ringGeo1.dispose();
+      ringGeo2.dispose();
+      pearlGeo.dispose();
       bioMaterial.dispose();
       nucleusMaterial.dispose();
-      pearlMaterial.dispose();
-      wineMaterial.dispose();
+      ringMat.dispose();
+      goldPearlMat.dispose();
       envTarget.dispose();
       renderer.dispose();
       renderer.domElement.remove();
