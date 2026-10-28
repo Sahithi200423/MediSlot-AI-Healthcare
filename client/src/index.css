@@ -1,7 +1,32 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'DM Sans';
+  src: url('/fonts/DMSans-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/fonts/InstrumentSerif-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/fonts/InstrumentSerif-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
 @layer base {
   :root {
+    /* Existing MediSlot Core */
     --color-primary: #102A43;
     --color-secondary: #14B8A6;
     --color-accent: #38BDF8;
@@ -11,6 +36,29 @@
     --color-muted: #64748B;
     --font-heading: 'Plus Jakarta Sans', system-ui, sans-serif;
     --font-body: 'Inter', system-ui, sans-serif;
+
+    /* Editorial Hospital Palette (Soft Spot Harmonized) */
+    --paper-ivory: #fbf9f5;
+    --paper-soft: #f5f1e9;
+    --paper-hover: #ede4d5;
+    
+    --ink-charcoal: #2a201e;
+    --ink-espresso: #542f28;
+    --ink-muted: #8b7566;
+    --ink-subtle: #a28c7a;
+    
+    --accent-sage: #4a6b5d;
+    --accent-sage-soft: #7e8a59;
+    --accent-gold: #c5a880;
+    --accent-gold-soft: #d8c29d;
+    --accent-terracotta: #e17145;
+    --accent-terracotta-dark: #b66143;
+    
+    --hairline-rule: #dcd3c6;
+    --hairline-subtle: #e8e1d5;
+
+    --font-editorial-heading: 'Instrument Serif', Georgia, serif;
+    --font-editorial-body: 'DM Sans', sans-serif;
   }
 
   .dark {
@@ -21,6 +69,26 @@
     --color-surface: #101726;
     --color-text: #F1F5F9;
     --color-muted: #94A3B8;
+
+    /* Editorial Dark Mode */
+    --paper-ivory: #141210;
+    --paper-soft: #1d1916;
+    --paper-hover: #29241f;
+    
+    --ink-charcoal: #fbf9f5;
+    --ink-espresso: #f5f1e9;
+    --ink-muted: #c4b5a8;
+    --ink-subtle: #968679;
+    
+    --accent-sage: #6c9180;
+    --accent-sage-soft: #99aa77;
+    --accent-gold: #d9bf99;
+    --accent-gold-soft: #ecd7b6;
+    --accent-terracotta: #f07e54;
+    --accent-terracotta-dark: #c96f50;
+    
+    --hairline-rule: #362f2a;
+    --hairline-subtle: #2b2520;
   }
 
   body {
@@ -34,6 +102,57 @@
     font-family: var(--font-heading);
     letter-spacing: -0.02em;
   }
+}
+
+/* Scoped Editorial Utility Classes */
+.editorial-hospital {
+  background-color: var(--paper-ivory);
+  color: var(--ink-espresso);
+  font-family: var(--font-editorial-body);
+}
+
+.font-editorial-serif {
+  font-family: var(--font-editorial-heading);
+}
+
+.font-editorial-sans {
+  font-family: var(--font-editorial-body);
+}
+
+.pill-button {
+  border: 1px solid var(--hairline-rule);
+  background: transparent;
+  border-radius: 30px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 18px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-editorial-body);
+  color: var(--ink-espresso);
+  transition: background 0.18s, border-color 0.18s, transform 0.18s;
+}
+
+.pill-button:hover {
+  background: var(--paper-hover);
+  border-color: var(--ink-subtle);
+  transform: translateY(-2px);
+}
+
+.pill-button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.pill-button:focus-visible {
+  outline: 2px solid var(--accent-terracotta);
+  outline-offset: 4px;
+}
+
+.hairline-divider {
+  border-top: 1px solid var(--hairline-rule);
 }
 
 /* Glassmorphism utility */

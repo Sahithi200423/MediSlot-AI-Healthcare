@@ -236,6 +236,12 @@ export async function requireDoctorAccess(
     return
   }
 
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!uuidRegex.test(doctorId)) {
+    res.status(400).json({ success: false, error: { message: "Invalid Doctor ID format. Must be a valid UUID.", statusCode: 400 } })
+    return
+  }
+
   try {
     const doctor = await prisma.doctor.findUnique({
       where: { id: doctorId },

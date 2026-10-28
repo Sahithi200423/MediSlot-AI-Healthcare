@@ -15,18 +15,20 @@ export function LoginPage() {
 
   const [rolePreset, setRolePreset] = useState<UserRole>("PATIENT")
   const [email, setEmail] = useState("patient@demo.medislot.com")
-  const [password, setPassword] = useState("password123")
+  const [password, setPassword] = useState("Password123!")
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handlePresetSelect = (selectedRole: UserRole) => {
     setRolePreset(selectedRole)
     setErrorMessage(null)
+    setPassword("Password123!")
     if (selectedRole === "PATIENT") setEmail("patient@demo.medislot.com")
     if (selectedRole === "DOCTOR") setEmail("dr.jenkins@demo.medislot.com")
     if (selectedRole === "CLINIC_ADMIN") setEmail("admin.metro@demo.medislot.com")
     if (selectedRole === "PLATFORM_ADMIN") setEmail("superadmin@medislot.com")
   }
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

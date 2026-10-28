@@ -13,6 +13,11 @@ export function getSupabaseAdmin(): SupabaseClient | null {
           autoRefreshToken: false,
           persistSession: false,
         },
+        global: {
+          headers: {
+            Authorization: `Bearer ${config.supabaseServiceRoleKey}`,
+          },
+        },
       })
       return supabaseClient
     } catch (err) {
