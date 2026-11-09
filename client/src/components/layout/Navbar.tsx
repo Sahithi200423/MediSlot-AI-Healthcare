@@ -58,7 +58,7 @@ export function Navbar({ onOpenBooking }: { onOpenBooking?: () => void }) {
           </nav>
 
           {/* Right: Sage Pill & Terracotta Button matching screenshot */}
-          <div className="hidden sm:flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-4 shrink-0">
             <div className="hidden lg:flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#4a6356] text-white text-[11px] font-semibold tracking-wider uppercase shadow-xs">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
               <span>ACCEPTING NEW PATIENTS</span>
@@ -85,7 +85,7 @@ export function Navbar({ onOpenBooking }: { onOpenBooking?: () => void }) {
               <button
                 type="button"
                 onClick={onOpenBooking}
-                className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-6 py-2.5 text-sm font-medium transition-all shadow-sm hover:shadow cursor-pointer active:scale-98"
+                className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-6 py-2.5 text-sm font-medium transition-all shadow-sm hover:shadow cursor-pointer active:scale-98 shrink-0 whitespace-nowrap"
               >
                 Book Consultation
               </button>

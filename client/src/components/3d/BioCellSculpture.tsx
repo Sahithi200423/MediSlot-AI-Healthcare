@@ -4,21 +4,21 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 
 /**
  * Creates the organic, multi-tiered cellular membrane geometry matching the
- * reference luxury medical art installation:
+ * exact reference healthcare sculpture:
  * - Smooth concave central pocket cradling the golden nucleus
- * - Broad, softly rounded inner concentric fold / lip
- * - Gentle valley transition
- * - Flared undulating outer cellular petal/rim
+ * - Broad, softly rounded inner concentric fold / terrace step
+ * - Deeper valley transition providing visible concentric depth
+ * - Flared undulating outer cellular rim with natural organic lobes
  * - Continuous rounded biological rim edge
- * - Smooth convex rear organic shell
+ * - Smooth convex rear organic shell for optical volumetric depth
  */
 function createBioCellMembraneGeometry(): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry();
 
-  const nR = 88; // Radial subdivisions on front face
-  const nRim = 18; // Edge curvature subdivisions
-  const nBack = 64; // Radial subdivisions on rear convex dome
-  const nTheta = 180; // Azimuthal angle subdivisions (silky smooth curves)
+  const nR = 96; // Radial subdivisions on front face
+  const nRim = 20; // Edge curvature subdivisions
+  const nBack = 72; // Radial subdivisions on rear convex dome
+  const nTheta = 200; // Azimuthal angle subdivisions (silky smooth curves)
 
   const totalRings = nR + nRim + nBack + 1;
   const vertices: number[] = [];
@@ -26,15 +26,16 @@ function createBioCellMembraneGeometry(): THREE.BufferGeometry {
   const uvs: number[] = [];
   const indices: number[] = [];
 
-  // Organic perimeter radius matching reference screenshot's biological lobes
+  // Organic perimeter radius matching reference screenshot's rounded biological silhouette
+  // Balanced, rounded shape with soft lobes, avoiding sharp corners or pinched oval
   const getRadius = (theta: number) => {
     return (
-      1.92 *
+      1.96 *
       (1.0 +
-        0.085 * Math.cos(theta - 0.75) +
-        0.068 * Math.cos(2 * theta - 1.25) +
-        0.030 * Math.sin(3 * theta + 0.35) -
-        0.022 * Math.cos(4 * theta))
+        0.052 * Math.cos(theta - 0.40) +
+        0.062 * Math.cos(2 * theta - 1.10) +
+        0.032 * Math.cos(3 * theta + 0.80) -
+        0.018 * Math.cos(4 * theta))
     );
   };
 
@@ -45,23 +46,23 @@ function createBioCellMembraneGeometry(): THREE.BufferGeometry {
 
   // Front surface elevation profile: multi-tiered organic cellular cup
   const getFrontZ = (s: number, theta: number) => {
-    // 1. Central hollow pocket for golden nucleus
-    const centerPocket = -0.46 * Math.exp(-Math.pow(s / 0.35, 2));
+    // 1. Central hollow pocket cradling the golden nucleus
+    const centerPocket = -0.46 * Math.exp(-Math.pow(s / 0.33, 2));
 
-    // 2. Inner concentric fold creating layered depth
+    // 2. Inner concentric fold creating layered depth visible in reference
     const innerTerrace =
-      0.17 *
-      Math.exp(-Math.pow((s - 0.48) / 0.13, 2)) *
-      (1.0 + 0.08 * Math.cos(theta - 0.6));
+      0.18 *
+      Math.exp(-Math.pow((s - 0.47) / 0.11, 2)) *
+      (1.0 + 0.06 * Math.cos(theta - 0.50));
 
-    // 3. Gentle valley transition
-    const foldGroove = -0.05 * Math.exp(-Math.pow((s - 0.66) / 0.10, 2));
+    // 3. Gentle valley transition between inner fold and flared rim
+    const foldGroove = -0.065 * Math.exp(-Math.pow((s - 0.65) / 0.09, 2));
 
     // 4. Undulating flared outer rim
     const outerRimFlare =
-      0.25 *
-      Math.pow(smoothstep(0.62, 1.0, s), 1.25) *
-      (1.0 + 0.14 * Math.cos(2 * theta - 0.7) + 0.06 * Math.sin(3 * theta + 0.2));
+      0.26 *
+      Math.pow(smoothstep(0.63, 1.0, s), 1.25) *
+      (1.0 + 0.11 * Math.cos(2 * theta - 0.80) + 0.04 * Math.sin(3 * theta + 0.30));
 
     return centerPocket + innerTerrace + foldGroove + outerRimFlare;
   };
@@ -88,7 +89,7 @@ function createBioCellMembraneGeometry(): THREE.BufferGeometry {
       const theta = (j / nTheta) * Math.PI * 2;
       const baseR = getRadius(theta);
       const frontZRim = getFrontZ(1.0, theta);
-      const rimThickness = 0.095 * (1.0 + 0.04 * Math.cos(theta));
+      const rimThickness = 0.12 * (1.0 + 0.03 * Math.cos(theta));
 
       let x = 0;
       let y = 0;
@@ -96,34 +97,44 @@ function createBioCellMembraneGeometry(): THREE.BufferGeometry {
       let r = 1.0, g = 1.0, b = 1.0;
 
       if (isRim) {
-        const curR = baseR + 0.048 * Math.sin(rimAlpha);
+        const curR = baseR + 0.052 * Math.sin(rimAlpha);
         x = curR * Math.cos(theta);
         y = curR * Math.sin(theta);
         z = frontZRim - rimThickness * 0.5 * (1.0 - Math.cos(rimAlpha));
-        r = 0.99; g = 0.98; b = 0.96;
+        // Soft shaded alabaster rim edge
+        r = 0.93; g = 0.915; b = 0.895;
       } else if (isFront) {
         const curR = rFrac * baseR;
         x = curR * Math.cos(theta);
         y = curR * Math.sin(theta);
         z = getFrontZ(rFrac, theta);
 
-        if (rFrac < 0.38) {
-          const warmth = 1.0 - (rFrac / 0.38);
-          r = 1.0 - warmth * 0.01;
-          g = 0.98 - warmth * 0.03;
-          b = 0.95 - warmth * 0.07;
-        } else if (rFrac < 0.58) {
-          r = 0.995; g = 0.99; b = 0.98;
+        if (rFrac < 0.36) {
+          // Central hollow pocket: subtle warm amber glow cast from the golden nucleus
+          const warmth = 1.0 - (rFrac / 0.36);
+          r = 0.98 - warmth * 0.01;
+          g = 0.94 - warmth * 0.03;
+          b = 0.89 - warmth * 0.07;
+        } else if (rFrac < 0.56) {
+          // Inner concentric fold ridge: luminous satin alabaster crest
+          const ridge = 1.0 - Math.abs((rFrac - 0.47) / 0.09);
+          r = 0.97 + Math.max(0, ridge) * 0.025;
+          g = 0.955 + Math.max(0, ridge) * 0.025;
+          b = 0.935 + Math.max(0, ridge) * 0.025;
+        } else if (rFrac < 0.73) {
+          // Valley groove between folds: subtle natural shade to accentuate the concentric tiers
+          r = 0.925; g = 0.910; b = 0.885;
         } else {
-          r = 0.99; g = 0.985; b = 0.97;
+          // Outer undulating flared rim: luminous pearl ivory
+          r = 0.985; g = 0.975; b = 0.96;
         }
       } else {
         const curR = rFrac * baseR;
         x = curR * Math.cos(theta);
         y = curR * Math.sin(theta);
-        const domeDepth = 0.52 * Math.pow(Math.max(0, 1.0 - rFrac * rFrac), 0.72);
-        z = frontZRim - rimThickness - domeDepth + 0.035 * Math.cos(theta) * (1.0 - rFrac);
-        r = 0.97; g = 0.96; b = 0.94;
+        const domeDepth = 0.50 * Math.pow(Math.max(0, 1.0 - rFrac * rFrac), 0.72);
+        z = frontZRim - rimThickness - domeDepth + 0.03 * Math.cos(theta) * (1.0 - rFrac);
+        r = 0.92; g = 0.905; b = 0.88;
       }
 
       vertices.push(x, y, z);
@@ -155,9 +166,53 @@ function createBioCellMembraneGeometry(): THREE.BufferGeometry {
 }
 
 /**
- * Generates a subtle procedural satin/pearl micro-texture on canvas
+ * Generates an organic, cloudy alabaster / marble stone texture with delicate
+ * internal density variations to emulate realistic mineral/biological translucency.
  */
-function createMicroTexture(type: 'pearl' | 'gold'): THREE.CanvasTexture {
+function createAlabasterTexture(): THREE.CanvasTexture {
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const imgData = ctx.createImageData(size, size);
+    const d = imgData.data;
+
+    for (let y = 0; y < size; y++) {
+      const ny = y / size;
+      for (let x = 0; x < size; x++) {
+        const nx = x / size;
+        const idx = (y * size + x) * 4;
+
+        // Multi-octave harmonic cloudy noise for natural stone veins
+        const n1 = Math.sin(nx * 6.28 * 2.5 + Math.cos(ny * 6.28 * 2.0) * 1.6);
+        const n2 = Math.sin(nx * 6.28 * 5.5 - ny * 6.28 * 4.2) * 0.45;
+        const n3 = Math.sin((nx + ny) * 6.28 * 9.0) * 0.25;
+        const n = (n1 + n2 + n3) / 1.70; // -1 to +1
+
+        // Alabaster base: soft warm cream with subtle smoky wisps
+        const base = 238 + n * 14;
+        d[idx] = Math.min(255, Math.floor(base));
+        d[idx + 1] = Math.min(255, Math.floor(base * 0.985));
+        d[idx + 2] = Math.min(255, Math.floor(base * 0.965));
+        d[idx + 3] = 255;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(1.5, 1.5);
+  return texture;
+}
+
+/**
+ * Generates subtle satin-brushed gold micro-grain texture
+ */
+function createGoldTexture(): THREE.CanvasTexture {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -170,25 +225,12 @@ function createMicroTexture(type: 'pearl' | 'gold'): THREE.CanvasTexture {
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const idx = (y * size + x) * 4;
-        if (type === 'pearl') {
-          const n =
-            Math.sin(x * 0.12) * Math.cos(y * 0.12) * 0.5 +
-            Math.sin(x * 0.28 + y * 0.24) * 0.3;
-          const val = Math.floor(225 + n * 20);
-          d[idx] = val;
-          d[idx + 1] = val;
-          d[idx + 2] = val;
-          d[idx + 3] = 255;
-        } else {
-          const n =
-            Math.sin(y * 0.8) * 0.4 +
-            (Math.random() - 0.5) * 0.35;
-          const val = Math.floor(215 + n * 35);
-          d[idx] = val;
-          d[idx + 1] = val;
-          d[idx + 2] = val;
-          d[idx + 3] = 255;
-        }
+        const n = Math.sin(y * 0.7) * 0.35 + (Math.random() - 0.5) * 0.30;
+        const val = Math.floor(215 + n * 30);
+        d[idx] = val;
+        d[idx + 1] = val;
+        d[idx + 2] = val;
+        d[idx + 3] = 255;
       }
     }
     ctx.putImageData(imgData, 0, 0);
@@ -197,12 +239,12 @@ function createMicroTexture(type: 'pearl' | 'gold'): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(type === 'pearl' ? 4 : 8, type === 'pearl' ? 4 : 8);
+  texture.repeat.set(4, 4);
   return texture;
 }
 
 /**
- * Creates a soft radial shadow texture for realistic ground contact
+ * Creates a soft radial shadow texture for natural grounding on warm ivory background
  */
 function createSoftShadowTexture(): THREE.CanvasTexture {
   const size = 512;
@@ -215,10 +257,10 @@ function createSoftShadowTexture(): THREE.CanvasTexture {
     size / 2, size / 2, 0,
     size / 2, size / 2, size / 2
   );
-  gradient.addColorStop(0, 'rgba(84, 55, 26, 0.22)');
-  gradient.addColorStop(0.35, 'rgba(110, 80, 48, 0.14)');
-  gradient.addColorStop(0.70, 'rgba(140, 110, 75, 0.05)');
-  gradient.addColorStop(1, 'rgba(140, 110, 75, 0)');
+  gradient.addColorStop(0, 'rgba(75, 48, 20, 0.40)');
+  gradient.addColorStop(0.35, 'rgba(102, 72, 38, 0.26)');
+  gradient.addColorStop(0.70, 'rgba(138, 108, 70, 0.10)');
+  gradient.addColorStop(1, 'rgba(138, 108, 70, 0)');
 
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
@@ -252,7 +294,7 @@ export default function BioCellSculpture() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
+    renderer.toneMappingExposure = 1.04;
 
     renderer.domElement.setAttribute('aria-hidden', 'true');
     renderer.domElement.style.outline = 'none';
@@ -262,7 +304,8 @@ export default function BioCellSculpture() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
-    camera.position.set(0, 0, 8.4);
+    // Camera distance at 7.7 so sculpture occupies the full heroic area matching reference screenshot
+    camera.position.set(0, 0, 7.7);
 
     // High-fidelity studio PMREM environment for pearl & gold reflections
     const environment = new RoomEnvironment();
@@ -272,50 +315,50 @@ export default function BioCellSculpture() {
     environment.dispose();
     generator.dispose();
 
-    // Procedural micro-textures for museum-grade material finishes
-    const pearlTexture = createMicroTexture('pearl');
-    const goldTexture = createMicroTexture('gold');
+    // Procedural textures for realistic material finishes
+    const alabasterTexture = createAlabasterTexture();
+    const goldTexture = createGoldTexture();
     const shadowTexture = createSoftShadowTexture();
 
-    // Soft realistic circular contact shadow plane behind sculpture
-    const shadowGeo = new THREE.PlaneGeometry(6.2, 6.2);
+    // Soft realistic contact shadow plane behind sculpture
+    const shadowGeo = new THREE.PlaneGeometry(7.2, 7.2);
     const shadowMat = new THREE.MeshBasicMaterial({
       map: shadowTexture,
       transparent: true,
       depthWrite: false,
     });
     const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
-    shadowMesh.position.set(0.2, -0.3, -0.8);
+    shadowMesh.position.set(0.18, -0.40, -0.70);
     scene.add(shadowMesh);
 
     // Studio lighting matching the approved reference photograph:
     // 1. Key Light from top-left (warm daylight ivory casting soft specular highlights)
-    const keyLight = new THREE.DirectionalLight(0xfff8ee, 3.8);
-    keyLight.position.set(-3.8, 4.8, 5.0);
+    const keyLight = new THREE.DirectionalLight(0xfff7ee, 2.9);
+    keyLight.position.set(-3.5, 4.5, 4.6);
     scene.add(keyLight);
 
     // 2. Warm golden cavity fill light to create the warm amber glow on the translucent inner cup
-    const nucleusFillLight = new THREE.PointLight(0xff9e2e, 4.0, 6.0, 1.2);
-    nucleusFillLight.position.set(0.04, 0.02, 0.22);
+    const nucleusFillLight = new THREE.PointLight(0xff9622, 4.0, 5.2, 1.2);
+    nucleusFillLight.position.set(0.02, 0.01, 0.22);
     scene.add(nucleusFillLight);
 
     // 3. Rim/Back light to highlight the translucent undulating membrane edges
-    const rimLight = new THREE.DirectionalLight(0xffffff, 2.4);
-    rimLight.position.set(2.4, 3.6, -3.8);
+    const rimLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    rimLight.position.set(2.2, 3.4, -3.6);
     scene.add(rimLight);
 
     // 4. Soft right fill light
-    const fillLight = new THREE.DirectionalLight(0xffecd8, 1.4);
-    fillLight.position.set(4.2, 1.4, 2.0);
+    const fillLight = new THREE.DirectionalLight(0xffecd6, 1.2);
+    fillLight.position.set(4.0, 1.4, 2.2);
     scene.add(fillLight);
 
     // 5. Subtle warm bottom bounce
-    const bounceLight = new THREE.DirectionalLight(0xfff5e8, 0.7);
-    bounceLight.position.set(-2.2, -3.4, 1.6);
+    const bounceLight = new THREE.DirectionalLight(0xfff4e6, 0.55);
+    bounceLight.position.set(-1.8, -3.0, 1.4);
     scene.add(bounceLight);
 
     // 6. Ambient soft studio illumination
-    scene.add(new THREE.AmbientLight(0xfffaf6, 0.65));
+    scene.add(new THREE.AmbientLight(0xfffaf6, 0.52));
 
     // Master sculpture group
     const sculptureGroup = new THREE.Group();
@@ -323,22 +366,22 @@ export default function BioCellSculpture() {
     // -------------------------------------------------------------------------
     // 1. WARM METALLIC GOLDEN NUCLEUS (Central Spherical Orb)
     // -------------------------------------------------------------------------
-    const nucleusGeo = new THREE.SphereGeometry(0.72, 64, 64);
+    const nucleusGeo = new THREE.SphereGeometry(0.78, 64, 64);
     const nucleusMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xdca034), // Rich warm 24K gold
-      emissive: new THREE.Color(0x361d02),
+      color: new THREE.Color(0xd5952c), // Warm liquid amber gold
+      emissive: new THREE.Color(0x382004),
       emissiveIntensity: 0.16,
-      metalness: 0.95,
-      roughness: 0.28, // Luxury satin sheen
+      metalness: 0.90,
+      roughness: 0.26, // Luxury satin finish with soft reflections
       bumpMap: goldTexture,
-      bumpScale: 0.005,
-      clearcoat: 0.42,
+      bumpScale: 0.003,
+      clearcoat: 0.52,
       clearcoatRoughness: 0.20,
-      reflectivity: 0.94,
-      envMapIntensity: 1.65,
+      reflectivity: 0.92,
+      envMapIntensity: 1.55,
     });
     const nucleusMesh = new THREE.Mesh(nucleusGeo, nucleusMaterial);
-    nucleusMesh.position.set(0.03, 0.01, 0.02);
+    nucleusMesh.position.set(0.02, 0.01, 0.02);
     sculptureGroup.add(nucleusMesh);
 
     // -------------------------------------------------------------------------
@@ -346,26 +389,27 @@ export default function BioCellSculpture() {
     // -------------------------------------------------------------------------
     const outerGeo = createBioCellMembraneGeometry();
     const outerMembraneMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xfcfbfa),
+      color: new THREE.Color(0xf6f2ea), // Warm alabaster white base
       vertexColors: true,
-      roughness: 0.20, // Silky frosted alabaster luster
-      metalness: 0.02,
-      clearcoat: 0.45,
-      clearcoatRoughness: 0.18,
-      transmission: 0.68, // Luminous semi-translucent frosted glass / jade depth
-      thickness: 1.8,
-      ior: 1.48,
-      attenuationColor: new THREE.Color(0xfff7eb),
-      attenuationDistance: 2.0,
-      sheen: 0.90,
+      roughness: 0.28, // Silky frosted alabaster luster
+      metalness: 0.01,
+      clearcoat: 0.50,
+      clearcoatRoughness: 0.22,
+      transmission: 0.56, // Semi-translucent frosted alabaster depth
+      thickness: 2.3,
+      ior: 1.46,
+      attenuationColor: new THREE.Color(0xf5ecda),
+      attenuationDistance: 1.7,
+      sheen: 0.85,
       sheenRoughness: 0.30,
-      sheenColor: new THREE.Color(0xfff7ed),
-      specularIntensity: 1.0,
+      sheenColor: new THREE.Color(0xfff7ec),
+      specularIntensity: 0.95,
       specularColor: new THREE.Color(0xffffff),
-      bumpMap: pearlTexture,
-      bumpScale: 0.004,
+      map: alabasterTexture,
+      bumpMap: alabasterTexture,
+      bumpScale: 0.003,
       side: THREE.DoubleSide,
-      envMapIntensity: 1.30,
+      envMapIntensity: 1.20,
     });
     const outerMesh = new THREE.Mesh(outerGeo, outerMembraneMaterial);
     sculptureGroup.add(outerMesh);
@@ -376,30 +420,30 @@ export default function BioCellSculpture() {
     const ringGroup = new THREE.Group();
 
     // Slender champagne-gold orbital ring
-    const ringRadius = 2.42;
-    const ringThickness = 0.0125;
+    const ringRadius = 2.30;
+    const ringThickness = 0.012;
     const ringGeo = new THREE.TorusGeometry(ringRadius, ringThickness, 32, 240);
     const ringMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xdfba78), // Delicate champagne gold
+      color: new THREE.Color(0xdfba76), // Delicate champagne gold
       metalness: 0.95,
-      roughness: 0.22,
-      clearcoat: 0.45,
+      roughness: 0.24,
+      clearcoat: 0.48,
       clearcoatRoughness: 0.20,
       envMapIntensity: 1.5,
     });
     const ringMesh = new THREE.Mesh(ringGeo, ringMaterial);
 
     // Exact Euler rotation matching reference screenshot:
-    // Ring ellipse major axis oriented from bottom-left to top-right
+    // Ring ellipse major axis oriented diagonally from bottom-left to top-right
     // Sweeps forward (Z > 0) in lower-left, loops behind (Z < 0) in upper-right
     ringMesh.rotation.order = 'XYZ';
-    ringMesh.rotation.set(1.066, 0.436, 0.229);
+    ringMesh.rotation.set(1.04, 0.42, 0.21);
     ringGroup.add(ringMesh);
 
-    // Two Golden Spheres attached directly onto the orbital ring:
-    // Sphere 1: Lower-left (~8 o'clock on the ring, sweeping forward in front)
-    // Sphere 2: Upper-right (~2 o'clock on the ring, sweeping behind)
-    const sphereGeo1 = new THREE.SphereGeometry(0.135, 32, 32);
+    // Exactly Two Golden Spheres attached directly onto the orbital ring:
+    // Sphere 1: Lower-left (~150 deg on the ring, sweeping forward in front of the cell)
+    // Sphere 2: Upper-right (~15 deg on the ring, upper-right lobe)
+    const sphereGeo1 = new THREE.SphereGeometry(0.130, 32, 32);
     const sphereGeo2 = new THREE.SphereGeometry(0.125, 32, 32);
 
     const sphere1 = new THREE.Mesh(sphereGeo1, nucleusMaterial);
@@ -411,7 +455,7 @@ export default function BioCellSculpture() {
     sculptureGroup.add(ringGroup);
 
     // Initial orientation matching reference screenshot: slight forward tilt, angled towards viewer
-    sculptureGroup.rotation.set(0.14, -0.18, 0.04);
+    sculptureGroup.rotation.set(0.12, -0.16, 0.03);
     scene.add(sculptureGroup);
 
     // -------------------------------------------------------------------------
@@ -423,10 +467,10 @@ export default function BioCellSculpture() {
     let isDragging = false;
     let lastX = 0;
     let lastY = 0;
-    let rotX = 0.14;
-    let rotY = -0.18;
-    let targetRotX = 0.14;
-    let targetRotY = -0.18;
+    let rotX = 0.12;
+    let rotY = -0.16;
+    let targetRotX = 0.12;
+    let targetRotY = -0.16;
     let velX = 0;
     let velY = 0;
     let isVisible = true;
@@ -434,7 +478,7 @@ export default function BioCellSculpture() {
 
     // Helper to calculate exact 3D position along the tilted ring
     const updateSpheresOnRing = (angleOffset: number) => {
-      // Lower-left sphere (sweeping forward at ~150 deg on the ring)
+      // Lower-left sphere (at ~150 deg on the ring, clearly in front of the cell at z > 0)
       const theta1 = (150 * Math.PI) / 180 + angleOffset;
       const v1 = new THREE.Vector3(
         Math.cos(theta1) * ringRadius,
@@ -443,8 +487,8 @@ export default function BioCellSculpture() {
       ).applyEuler(ringMesh.rotation);
       sphere1.position.copy(v1);
 
-      // Upper-right sphere (sweeping behind at ~0 deg on the ring)
-      const theta2 = (0 * Math.PI) / 180 + angleOffset;
+      // Upper-right sphere (at ~15 deg on the ring, looping around the top right)
+      const theta2 = (15 * Math.PI) / 180 + angleOffset;
       const v2 = new THREE.Vector3(
         Math.cos(theta2) * ringRadius,
         Math.sin(theta2) * ringRadius,
@@ -457,12 +501,12 @@ export default function BioCellSculpture() {
 
     const renderScene = (time: number) => {
       // Subtle organic breathing animation
-      const breath = 1 + Math.sin(time * 0.9) * 0.012;
+      const breath = 1 + Math.sin(time * 0.8) * 0.010;
       sculptureGroup.scale.set(breath, breath, breath);
 
       // Gentle orbital progression
-      updateSpheresOnRing(time * 0.08);
-      ringGroup.rotation.z = time * 0.035;
+      updateSpheresOnRing(time * 0.03);
+      ringGroup.rotation.z = time * 0.015;
 
       sculptureGroup.rotation.x = rotX;
       sculptureGroup.rotation.y = rotY;
@@ -479,7 +523,7 @@ export default function BioCellSculpture() {
 
       if (!isDragging) {
         // Gentle, slow automatic rotation
-        targetRotY += 0.045 * dt;
+        targetRotY += 0.025 * dt;
 
         // Inertia damping
         targetRotX += velX * dt;
@@ -501,7 +545,7 @@ export default function BioCellSculpture() {
       if (rect.width === 0 || rect.height === 0) return;
       renderer.setSize(rect.width, rect.height);
       camera.aspect = rect.width / rect.height;
-      camera.position.z = camera.aspect < 1 ? 9.2 : 8.4;
+      camera.position.z = camera.aspect < 1 ? 8.4 : 7.7;
       camera.updateProjectionMatrix();
       renderScene(elapsed);
     };
@@ -602,7 +646,7 @@ export default function BioCellSculpture() {
       shadowGeo.dispose();
       shadowMat.dispose();
       shadowTexture.dispose();
-      pearlTexture.dispose();
+      alabasterTexture.dispose();
       goldTexture.dispose();
       outerMembraneMaterial.dispose();
       nucleusMaterial.dispose();
