@@ -1,0 +1,53 @@
+services:
+  # 1. Express TypeScript Backend API
+  - type: web
+    name: medislot-backend
+    runtime: node
+    rootDir: server
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FRONTEND_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AI_SERVICE_URL
+        sync: false
+      - key: AI_SERVICE_SECRET
+        generateValue: true
+
+  # 2. Python FastAPI Clinical AI Microservice
+  - type: web
+    name: medislot-ai-service
+    runtime: python
+    rootDir: ai-service
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: AI_SERVICE_NAME
+        value: "MediSlot Clinical AI Copilot"
+      - key: AI_SERVICE_VERSION
+        value: "1.0.0"
+      - key: AI_PROVIDER
+        value: "deterministic_local"
+      - key: AI_SERVICE_SECRET
+        sync: false
+

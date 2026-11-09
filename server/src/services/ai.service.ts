@@ -28,11 +28,15 @@ async function callAiService(endpoint: string, options: HttpFetchOptions = { met
     ...(options.headers || {})
   }
 
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 60000) // 60s timeout to allow Render free tier cold-start wakeups
+
   try {
     const res = await fetch(url, {
       method: options.method,
       headers,
-      body: options.body ? JSON.stringify(options.body) : undefined
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
     })
 
     if (!res.ok) {
@@ -50,7 +54,15 @@ async function callAiService(endpoint: string, options: HttpFetchOptions = { met
     return await res.json()
   } catch (error: any) {
     if (error instanceof AppError) throw error
+    if (error.name === "AbortError" || error.message?.includes("fetch failed") || error.code === "ECONNREFUSED") {
+      throw new AppError(
+        "Clinical AI Copilot service is currently starting up from standby (free-tier cold start). Please allow 30-45 seconds and retry.",
+        503
+      )
+    }
     throw new AppError(`Failed to connect to MediSlot AI Microservice: ${error.message}`, 503)
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 

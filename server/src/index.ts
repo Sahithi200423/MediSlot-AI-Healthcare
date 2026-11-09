@@ -13,7 +13,7 @@ app.use(morgan(config.nodeEnv === "development" ? "dev" : "combined"))
 
 // 2. CORS Configuration
 const allowedOrigins = [
-  config.frontendUrl,
+  ...config.frontendUrl.split(",").map((u) => u.trim().replace(/\/$/, "")),
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:5174",
@@ -24,7 +24,15 @@ app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, curl, or Postman)
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin) {
+        return callback(null, true)
+      }
+      const cleanOrigin = origin.replace(/\/$/, "")
+      if (
+        allowedOrigins.includes(cleanOrigin) ||
+        cleanOrigin.endsWith(".pages.dev") ||
+        cleanOrigin.endsWith(".vercel.app")
+      ) {
         callback(null, true)
       } else {
         callback(new Error(`Origin ${origin} not allowed by CORS`))
