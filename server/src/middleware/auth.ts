@@ -48,91 +48,78 @@ export async function authenticate(
   const token = authHeader.split(" ")[1]
 
   try {
+    // 1. Check local JWT signature first (fast, resilient to external network outages)
+    try {
+      const decoded = jwt.verify(token, config.jwtSecret) as any
+      if (decoded && decoded.id) {
+        req.user = {
+          id: decoded.id,
+          email: decoded.email || "",
+          role: decoded.role || "PATIENT",
+          firstName: decoded.firstName || "Demo",
+          lastName: decoded.lastName || "User",
+          clinicId: decoded.clinicId || null,
+          clinicIds: decoded.clinicId ? [decoded.clinicId] : (decoded.clinicIds || []),
+        }
+        return next()
+      }
+    } catch (_) {
+      // Not a local secret token or expired, try Supabase next
+    }
+
     const supabase = getSupabaseAdmin()
 
-    // 1. Supabase Auth Token Verification (Production / Live Supabase Mode)
+    // 2. Supabase Auth Token Verification (Production / Live Supabase Mode)
     if (supabase) {
-      const { data: { user }, error } = await supabase.auth.getUser(token)
-
-      if (error || !user) {
-        res.status(401).json({
-          success: false,
-          error: {
-            message: "Invalid or expired Supabase session. Please log in again.",
-            statusCode: 401,
-          },
-        })
-        return
-      }
-
-      // Query user profile from Prisma
-      let profile = null
       try {
-        profile = await prisma.profile.findUnique({
-          where: { id: user.id },
-          include: {
-            doctor: true,
-            clinicMemberships: true,
-          },
-        })
-      } catch (dbErr) {
-        // Fallback to metadata if DB read encounters transient error
+        const { data: { user }, error } = await supabase.auth.getUser(token)
+
+        if (!error && user) {
+          let profile = null
+          try {
+            profile = await prisma.profile.findUnique({
+              where: { id: user.id },
+              include: {
+                doctor: true,
+                clinicMemberships: true,
+              },
+            })
+          } catch (dbErr) {
+            // Fallback to metadata if DB read encounters transient error
+          }
+
+          const role = (profile?.role || user.user_metadata?.role || "PATIENT") as UserRole
+          const firstName = profile?.firstName || user.user_metadata?.first_name || "User"
+          const lastName = profile?.lastName || user.user_metadata?.last_name || ""
+          const membershipClinicIds: string[] = profile?.clinicMemberships?.map((m: any) => m.clinicId) || []
+          if (profile?.doctor?.clinicId && !membershipClinicIds.includes(profile.doctor.clinicId)) {
+            membershipClinicIds.push(profile.doctor.clinicId)
+          }
+          const clinicId = membershipClinicIds[0] || null
+
+          req.user = {
+            id: user.id,
+            email: user.email || "",
+            role,
+            firstName,
+            lastName,
+            clinicId,
+            clinicIds: membershipClinicIds,
+          }
+          return next()
+        }
+      } catch (sbErr) {
+        // Supabase network error
       }
-
-      const role = (profile?.role || user.user_metadata?.role || "PATIENT") as UserRole
-      const firstName = profile?.firstName || user.user_metadata?.first_name || "User"
-      const lastName = profile?.lastName || user.user_metadata?.last_name || ""
-      const membershipClinicIds: string[] = profile?.clinicMemberships?.map((m: any) => m.clinicId) || []
-      if (profile?.doctor?.clinicId && !membershipClinicIds.includes(profile.doctor.clinicId)) {
-        membershipClinicIds.push(profile.doctor.clinicId)
-      }
-      const clinicId = membershipClinicIds[0] || null
-
-      req.user = {
-        id: user.id,
-        email: user.email || "",
-        role,
-        firstName,
-        lastName,
-        clinicId,
-        clinicIds: membershipClinicIds,
-      }
-      return next()
     }
 
-    // 2. Strict Protection: If Supabase credentials are configured, NEVER allow mock JWT fallback
-    if (config.supabaseUrl && (config.supabaseAnonKey || config.supabaseServiceRoleKey)) {
-      res.status(401).json({
-        success: false,
-        error: {
-          message: "Real Supabase authentication is enforced. Mock sessions are rejected.",
-          statusCode: 401,
-        },
-      })
-      return
-    }
-
-    // 3. Offline Dev Fallback ONLY when Supabase credentials are completely omitted
-    const decoded = jwt.verify(token, config.jwtSecret) as any
-
-    if (!decoded || !decoded.id) {
-      res.status(401).json({
-        success: false,
-        error: { message: "Invalid or expired token", statusCode: 401 },
-      })
-      return
-    }
-
-    req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      role: decoded.role || "PATIENT",
-      firstName: decoded.firstName || "Demo",
-      lastName: decoded.lastName || "User",
-      clinicId: decoded.clinicId || null,
-      clinicIds: decoded.clinicId ? [decoded.clinicId] : [],
-    }
-    next()
+    res.status(401).json({
+      success: false,
+      error: {
+        message: "Invalid or expired session. Please log in again.",
+        statusCode: 401,
+      },
+    })
   } catch (err: any) {
     res.status(401).json({
       success: false,

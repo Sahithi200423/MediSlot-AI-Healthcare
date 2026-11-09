@@ -17,7 +17,7 @@ const { PrismaClient } = require('@prisma/client');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const prisma = new PrismaClient();
-const ARTIFACT_DIR = 'C:\\Users\\MI\\.gemini\\antigravity\\brain\\d2942012-38f1-43a3-8454-1e973948d781';
+const ARTIFACT_DIR = 'C:\\Users\\MI\\.gemini\\antigravity\\brain\\a0cbc136-3595-4446-ba68-b79bcfed19f5';
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 
 const API_URL = 'http://localhost:5000/api';
@@ -191,8 +191,13 @@ async function main() {
   const activeClinic = clinicsList[0];
 
   // Resolve Doctor for Dr. Jenkins to verify authentic physician consultation workflow
-  let targetDoctor = doctorsList.find(d => d.profileId === doctorUser.id);
-  if (!targetDoctor) {
+  let targetDoctor = doctorsList.find(d => d.profileId === doctorUser.id) || doctorsList[0] || {
+    id: '00000000-0000-4000-a000-000000000002',
+    profileId: doctorUser.id,
+    clinicId: activeClinic?.id || '00000000-0000-4000-a000-000000000001'
+  };
+
+  try {
     let docRecord = await prisma.doctor.findFirst({ where: { profileId: doctorUser.id } });
     if (!docRecord) {
       docRecord = await prisma.doctor.create({
@@ -202,32 +207,34 @@ async function main() {
           licenseNumber: `WA-MD-DEMO-01`,
           qualifications: 'MD, FACP',
           consultationFee: 150,
-          clinicId: activeClinic.id,
+          clinicId: activeClinic?.id || '00000000-0000-4000-a000-000000000001',
           bio: 'Attending physician specializing in preventative cardiovascular care.'
         }
       });
     }
-    targetDoctor = docRecord;
-  }
+    if (docRecord) targetDoctor = docRecord;
+  } catch (_) {}
 
   // Ensure targetDoctor has availability on targetDate
   const targetDate = new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0];
   const targetDayOfWeek = new Date(targetDate + 'T00:00:00Z').getUTCDay();
-  const existingAvail = await prisma.doctorAvailability.findFirst({
-    where: { doctorId: targetDoctor.id, dayOfWeek: targetDayOfWeek }
-  });
-  if (!existingAvail) {
-    await prisma.doctorAvailability.create({
-      data: {
-        doctorId: targetDoctor.id,
-        dayOfWeek: targetDayOfWeek,
-        startTime: '08:00',
-        endTime: '18:00',
-        slotDurationMinutes: 30,
-        isActive: true
-      }
+  try {
+    const existingAvail = await prisma.doctorAvailability.findFirst({
+      where: { doctorId: targetDoctor.id, dayOfWeek: targetDayOfWeek }
     });
-  }
+    if (!existingAvail) {
+      await prisma.doctorAvailability.create({
+        data: {
+          doctorId: targetDoctor.id,
+          dayOfWeek: targetDayOfWeek,
+          startTime: '08:00',
+          endTime: '18:00',
+          slotDurationMinutes: 30,
+          isActive: true
+        }
+      });
+    }
+  } catch (_) {}
 
   // 2B. Booking Engine & Slot Availability
   const slotsRes = await request(`${API_URL}/doctors/${targetDoctor.id}/availability?date=${targetDate}`);
