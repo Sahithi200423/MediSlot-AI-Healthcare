@@ -1,4 +1,5 @@
 import { prisma } from "../config/db.js"
+import { isProdEnv } from "../config/env.js"
 import { 
   OnboardDoctorInput, 
   UpdateDoctorInput, 
@@ -117,7 +118,10 @@ export class DoctorService {
         },
         orderBy: { yearsOfExperience: "desc" },
       })
-    } catch (_) {
+    } catch (err) {
+      if (isProdEnv()) {
+        throw err
+      }
       return [
         {
           id: "00000000-0000-4000-a000-000000000002",
@@ -500,8 +504,15 @@ export class DoctorService {
         availableSlotsCount: availableCount,
         slots: generatedSlots,
       }
-    } catch (_) {
-      // Fallback slot generation when DB is offline
+    } catch (err: any) {
+      if (
+        isProdEnv() ||
+        err?.message === "Doctor not found" ||
+        err?.message?.startsWith("Invalid date format")
+      ) {
+        throw err
+      }
+      // Non-production offline slot fallback when DB is unreachable
       const defaultTimes = [
         "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
         "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30"

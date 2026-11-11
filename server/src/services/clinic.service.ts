@@ -1,5 +1,6 @@
 import crypto from "crypto"
 import { prisma } from "../config/db.js"
+import { isProdEnv } from "../config/env.js"
 import { CreateClinicInput, UpdateClinicInput, InviteStaffInput } from "../validators/clinic.validator.js"
 
 export class ClinicService {
@@ -66,7 +67,10 @@ export class ClinicService {
         },
         orderBy: { createdAt: "desc" },
       })
-    } catch (_) {
+    } catch (err) {
+      if (isProdEnv()) {
+        throw err
+      }
       return [
         {
           id: "00000000-0000-4000-a000-000000000001",
@@ -112,8 +116,15 @@ export class ClinicService {
         },
       })
 
-      if (clinic) return clinic
-    } catch (_) {}
+      if (!clinic) {
+        throw new Error("Clinic not found")
+      }
+      return clinic
+    } catch (err: any) {
+      if (isProdEnv() || err?.message === "Clinic not found") {
+        throw err
+      }
+    }
 
     return {
       id: clinicId || "00000000-0000-4000-a000-000000000001",

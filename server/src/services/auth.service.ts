@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken"
 import bcrypt from "bcryptjs"
-import { config } from "../config/env.js"
+import { config, isProdEnv } from "../config/env.js"
 import { getSupabaseAdmin, getSupabaseClient } from "../config/supabase.js"
 import { prisma } from "../config/db.js"
 import { RegisterInput, LoginInput } from "../validators/auth.validator.js"
@@ -145,7 +145,10 @@ export class AuthService {
       }
     }
 
-    // Guard: Never allow fallback if Supabase is configured
+    // Guard: Never allow fallback if Supabase is configured or in production
+    if (isProdEnv()) {
+      throw new Error("Authentication service is not configured for production registration.")
+    }
     if (config.supabaseUrl && (config.supabaseAnonKey || config.supabaseServiceRoleKey)) {
       throw new Error("Supabase authentication is active. Offline registration fallback is disabled.")
     }
@@ -186,7 +189,12 @@ export class AuthService {
    * Logs in a user using Supabase Auth or Local Dev Fallback.
    */
   public static async login(data: LoginInput) {
+    const prodMode = isProdEnv()
     const supabase = getSupabaseAdmin()
+
+    if (prodMode && !supabase) {
+      throw new Error("Authentication service is not configured for production.")
+    }
 
     // 1. Try Supabase Auth Login if reachable
     if (supabase) {
@@ -196,14 +204,22 @@ export class AuthService {
           password: data.password,
         })
 
-        if (!error && authData?.user && authData?.session) {
+        if (error) {
+          if (prodMode) {
+            throw new Error(error.message || "Invalid email or password")
+          }
+        } else if (authData?.user && authData?.session) {
           let profile = null
           try {
             profile = await prisma.profile.findUnique({
               where: { id: authData.user.id },
               include: { doctor: true, clinicMemberships: true },
             })
-          } catch (err) {}
+          } catch (err) {
+            if (prodMode) {
+              throw new Error("Database error while loading user profile")
+            }
+          }
 
           const role = (profile?.role || authData.user.user_metadata?.role || "PATIENT") as UserRole
           const firstName = profile?.firstName || authData.user.user_metadata?.first_name || "User"
@@ -222,13 +238,16 @@ export class AuthService {
             token: authData.session.access_token,
           }
         }
-      } catch (err) {
-        // Supabase is offline, paused, or unreachable - gracefully fall back to local demo accounts
+      } catch (err: any) {
+        if (prodMode) {
+          throw new Error(err?.message || "Authentication failed")
+        }
+        // In non-production only, fall back to local demo accounts if Supabase is unreachable
       }
     }
 
     // 2. Demo & Offline Fallback Mode (Strictly prohibited in production)
-    if (process.env.NODE_ENV === "production") {
+    if (prodMode) {
       throw new Error("Invalid email or password")
     }
 

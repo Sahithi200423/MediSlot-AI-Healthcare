@@ -1,5 +1,6 @@
 import crypto from "crypto"
 import { prisma } from "../config/db.js"
+import { isProdEnv } from "../config/env.js"
 import { 
   BookAppointmentInput, 
   RescheduleAppointmentInput, 
@@ -10,6 +11,18 @@ import { AppointmentStatus, Prisma } from "@prisma/client"
 
 const inMemoryBookedSlots = new Set<string>()
 const inMemoryAppointmentsMap = new Map<string, any>()
+
+function isDbConnectivityError(err: any): boolean {
+  if (err instanceof Prisma.PrismaClientInitializationError) return true
+  const msg = String(err?.message || "")
+  return (
+    msg.includes("Can't reach database server") ||
+    msg.includes("ECONNREFUSED") ||
+    msg.includes("ENOTFOUND") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("Connection terminated")
+  )
+}
 
 export class AppointmentService {
   /**
@@ -37,20 +50,40 @@ export class AppointmentService {
   }
 
   /**
+   * Ensures only the patient, assigned doctor, clinic staff, or platform admin can act on an appointment.
+   */
+  private static async assertAppointmentParticipant(
+    appointment: any,
+    profileId: string,
+    userRole: string,
+    action: string
+  ): Promise<void> {
+    const isPatient = appointment.patient?.profileId === profileId
+    const isDoctor = appointment.doctor?.profileId === profileId
+    let isClinicStaff = false
+
+    if (!isPatient && !isDoctor && userRole !== "PLATFORM_ADMIN" && appointment.clinicId) {
+      const membership = await prisma.clinicMembership.findUnique({
+        where: { clinicId_profileId: { clinicId: appointment.clinicId, profileId } },
+      })
+      isClinicStaff = Boolean(membership)
+    }
+
+    if (!isPatient && !isDoctor && !isClinicStaff && userRole !== "PLATFORM_ADMIN") {
+      throw new Error(`Forbidden: You are not authorized to ${action} this appointment`)
+    }
+  }
+
+  /**
    * Books an appointment with strict database-level concurrency protection against double booking.
    */
   public static async bookAppointment(profileId: string, data: BookAppointmentInput) {
     const slotKey = `${data.doctorId}_${data.date}_${data.time}`
-    if (inMemoryBookedSlots.has(slotKey)) {
-      throw new Error("This appointment slot has just been reserved by another patient. Please select an alternate time slot.")
-    }
-    inMemoryBookedSlots.add(slotKey)
 
     // Compute slot timestamps
     const { start: scheduledStart, end: scheduledEnd } = this.parseSlotTimes(data.date, data.time, 30)
 
     if (scheduledStart.getTime() < Date.now()) {
-      inMemoryBookedSlots.delete(slotKey)
       throw new Error("Cannot book an appointment in the past")
     }
 
@@ -240,20 +273,27 @@ export class AppointmentService {
 
       return result
     } catch (err: any) {
-      if (err.message && err.message.includes("reserved by another patient")) {
-        throw err
-      }
       // PostgreSQL Unique Index Constraint Violation (P2002) for race conditions
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
         throw new Error("This appointment slot has just been reserved by another patient. Please select an alternate time slot.")
       }
 
-      // Production Safety Guard: Never silently accept bookings without persistent database
-      if (process.env.NODE_ENV === "production") {
-        throw new Error("Database service is temporarily unavailable. Cannot securely book appointment without persistent database storage.")
+      // Never fall back to in-memory booking in production or on real validation/concurrency errors
+      if (isProdEnv()) {
+        if (isDbConnectivityError(err)) {
+          throw new Error("Database service is temporarily unavailable. Cannot securely book appointment without persistent database storage.")
+        }
+        throw err
       }
 
-      // Offline DB Fallback
+      if (!isDbConnectivityError(err)) {
+        throw err
+      }
+
+      // Non-production offline DB fallback (atomic slot check after DB unavailability confirmed)
+      if (inMemoryBookedSlots.has(slotKey)) {
+        throw new Error("This appointment slot has just been reserved by another patient. Please select an alternate time slot.")
+      }
       inMemoryBookedSlots.add(slotKey)
       const ref = this.generateReference()
       const fallbackAppt = {
@@ -323,7 +363,10 @@ export class AppointmentService {
         },
         orderBy: { scheduledStart: filter === "past" ? "desc" : "asc" },
       })
-    } catch (_) {
+    } catch (err) {
+      if (isProdEnv() || !isDbConnectivityError(err)) {
+        throw err
+      }
       return Array.from(inMemoryAppointmentsMap.values())
     }
   }
@@ -486,7 +529,8 @@ export class AppointmentService {
     userRole: string,
     data: CancelAppointmentInput
   ) {
-    let appointment = null
+    let appointment: any = null
+    let isOfflineMode = false
     try {
       appointment = await prisma.appointment.findUnique({
         where: { id: appointmentId },
@@ -495,16 +539,25 @@ export class AppointmentService {
           patient: { include: { profile: true } },
         },
       })
-    } catch (_) {}
+    } catch (err) {
+      if (isProdEnv() || !isDbConnectivityError(err)) {
+        throw err
+      }
+      isOfflineMode = true
+    }
 
     if (!appointment) {
-      appointment = inMemoryAppointmentsMap.get(appointmentId) || {
-        id: appointmentId,
-        patient: { profileId },
-        doctor: { profileId },
-        status: "CONFIRMED",
-        paymentStatus: "PENDING",
+      if (isProdEnv() || !isOfflineMode) {
+        throw new Error("Appointment not found")
       }
+      appointment = inMemoryAppointmentsMap.get(appointmentId)
+      if (!appointment) {
+        throw new Error("Appointment not found")
+      }
+    }
+
+    if (!isOfflineMode) {
+      await this.assertAppointmentParticipant(appointment, profileId, userRole, "cancel")
     }
 
     if (appointment.status === "CANCELLED") {
@@ -515,29 +568,57 @@ export class AppointmentService {
       throw new Error("Cannot cancel an appointment that has already been completed")
     }
 
-    try {
-      // Update appointment in transaction and issue notifications
-      return await prisma.$transaction(async (tx) => {
-        const updated = await tx.appointment.update({
-          where: { id: appointmentId },
-          data: {
-            status: "CANCELLED",
-            cancellationReason: data.cancellationReason,
-            paymentStatus: appointment.paymentStatus === "PAID" ? "REFUND_PENDING" : appointment.paymentStatus,
-          },
-        })
+    if (!isOfflineMode) {
+      try {
+        // Update appointment in transaction and issue notifications
+        return await prisma.$transaction(async (tx) => {
+          const updated = await tx.appointment.update({
+            where: { id: appointmentId },
+            data: {
+              status: "CANCELLED",
+              cancellationReason: data.cancellationReason,
+              paymentStatus: appointment.paymentStatus === "PAID" ? "REFUND_PENDING" : appointment.paymentStatus,
+            },
+          })
 
-        return updated
-      }, { maxWait: 10000, timeout: 30000 })
-    } catch (_) {
-      const updated = {
-        ...appointment,
-        status: "CANCELLED" as any,
-        cancellationReason: data.cancellationReason,
+          if (appointment.doctor?.profileId && appointment.patient?.profileId) {
+            const isPatient = appointment.patient.profileId === profileId
+            const dateStr = appointment.scheduledStart
+              ? new Date(appointment.scheduledStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+              : ""
+            await tx.notification.create({
+              data: isPatient
+                ? {
+                    profileId: appointment.doctor.profileId,
+                    title: "Appointment Cancelled by Patient",
+                    message: `Patient ${appointment.patient.profile?.firstName || ""} ${appointment.patient.profile?.lastName || ""} cancelled consultation on ${dateStr}. Reason: ${data.cancellationReason}`,
+                    type: "APPOINTMENT_CANCELLED",
+                  }
+                : {
+                    profileId: appointment.patient.profileId,
+                    title: "Appointment Cancelled by Clinic",
+                    message: `Your appointment with Dr. ${appointment.doctor.profile?.firstName || ""} ${appointment.doctor.profile?.lastName || ""} on ${dateStr} was cancelled. Reason: ${data.cancellationReason}`,
+                    type: "APPOINTMENT_CANCELLED",
+                  },
+            })
+          }
+
+          return updated
+        }, { maxWait: 10000, timeout: 30000 })
+      } catch (err) {
+        if (isProdEnv() || !isDbConnectivityError(err)) {
+          throw err
+        }
       }
-      inMemoryAppointmentsMap.set(appointmentId, updated)
-      return updated
     }
+
+    const updated = {
+      ...appointment,
+      status: "CANCELLED" as any,
+      cancellationReason: data.cancellationReason,
+    }
+    inMemoryAppointmentsMap.set(appointmentId, updated)
+    return updated
   }
 
   /**
@@ -549,7 +630,8 @@ export class AppointmentService {
     userRole: string,
     data: RescheduleAppointmentInput
   ) {
-    let appointment = null
+    let appointment: any = null
+    let isOfflineMode = false
     try {
       appointment = await prisma.appointment.findUnique({
         where: { id: appointmentId },
@@ -558,15 +640,25 @@ export class AppointmentService {
           patient: { include: { profile: true } },
         },
       })
-    } catch (_) {}
+    } catch (err) {
+      if (isProdEnv() || !isDbConnectivityError(err)) {
+        throw err
+      }
+      isOfflineMode = true
+    }
 
     if (!appointment) {
-      appointment = inMemoryAppointmentsMap.get(appointmentId) || {
-        id: appointmentId,
-        patient: { profileId },
-        doctor: { profileId },
-        status: "CONFIRMED",
+      if (isProdEnv() || !isOfflineMode) {
+        throw new Error("Appointment not found")
       }
+      appointment = inMemoryAppointmentsMap.get(appointmentId)
+      if (!appointment) {
+        throw new Error("Appointment not found")
+      }
+    }
+
+    if (!isOfflineMode) {
+      await this.assertAppointmentParticipant(appointment, profileId, userRole, "reschedule")
     }
 
     if (appointment.status === "CANCELLED" || appointment.status === "COMPLETED") {
@@ -576,9 +668,14 @@ export class AppointmentService {
     // Calculate new start and end times
     const { start: newStart, end: newEnd } = this.parseSlotTimes(data.date, data.time, 30)
 
-    try {
-      // Atomic reschedule transaction
-      return await prisma.$transaction(async (tx) => {
+    if (newStart.getTime() < Date.now()) {
+      throw new Error("Cannot reschedule an appointment to a past time")
+    }
+
+    if (!isOfflineMode) {
+      try {
+        // Atomic reschedule transaction
+        return await prisma.$transaction(async (tx) => {
       // 1. Verify doctor availability on new day of week
       const dayOfWeek = newStart.getUTCDay()
       const availability = await tx.doctorAvailability.findFirst({
@@ -673,16 +770,21 @@ export class AppointmentService {
 
       return updated
     }, { maxWait: 10000, timeout: 30000 })
-    } catch (_) {
-      const updated = {
-        ...appointment,
-        scheduledStart: newStart,
-        scheduledEnd: newEnd,
-        rescheduledCount: (appointment.rescheduledCount || 0) + 1,
+      } catch (err) {
+        if (isProdEnv() || !isDbConnectivityError(err)) {
+          throw err
+        }
       }
-      inMemoryAppointmentsMap.set(appointmentId, updated)
-      return updated
     }
+
+    const updated = {
+      ...appointment,
+      scheduledStart: newStart,
+      scheduledEnd: newEnd,
+      rescheduledCount: (appointment.rescheduledCount || 0) + 1,
+    }
+    inMemoryAppointmentsMap.set(appointmentId, updated)
+    return updated
   }
 
   /**

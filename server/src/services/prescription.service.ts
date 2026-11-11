@@ -1,10 +1,10 @@
-import { PrismaClient } from "@prisma/client"
 import PDFDocument from "pdfkit"
 import crypto from "crypto"
+import { prisma } from "../config/db.js"
+import { isProdEnv } from "../config/env.js"
 import { getSupabaseAdmin } from "../config/supabase.js"
 import { CreatePrescriptionInput } from "../validators/medical.validator.js"
 
-const prisma = new PrismaClient()
 const STORAGE_BUCKET = "medical-records"
 const SIGNED_URL_EXPIRES_IN = 300 // 5 minutes
 
@@ -28,7 +28,9 @@ export class PrescriptionService {
     ipAddress?: string,
     userAgent?: string
   ) {
+    const prodMode = isProdEnv()
     let doctor = null
+    let isOfflineDb = false
     try {
       doctor = await prisma.doctor.findUnique({
         where: { profileId: doctorProfileId },
@@ -37,9 +39,12 @@ export class PrescriptionService {
           clinic: true,
         },
       })
-    } catch (_) {}
+    } catch (err) {
+      if (prodMode) throw err
+      isOfflineDb = true
+    }
 
-    if (!doctor && (doctorProfileId === "00000000-0000-4000-a000-000000000005" || doctorProfileId === "demo-doctor-001")) {
+    if (!doctor && !prodMode && isOfflineDb && (doctorProfileId === "00000000-0000-4000-a000-000000000005" || doctorProfileId === "demo-doctor-001")) {
       doctor = {
         id: "00000000-0000-4000-a000-000000000002",
         profileId: doctorProfileId,
@@ -63,9 +68,12 @@ export class PrescriptionService {
           clinic: true,
         },
       })
-    } catch (_) {}
+    } catch (err) {
+      if (prodMode) throw err
+      isOfflineDb = true
+    }
 
-    if (!appointment) {
+    if (!appointment && !prodMode && isOfflineDb) {
       appointment = {
         id: data.appointmentId,
         bookingReference: "MS-DEMO-RX",
@@ -76,7 +84,11 @@ export class PrescriptionService {
       } as any
     }
 
-    if (appointment.doctorId && appointment.doctorId !== doctor.id && appointment.doctorId !== "doc-jenkins-001") {
+    if (!appointment) {
+      throw new Error("Appointment not found")
+    }
+
+    if (appointment.doctorId !== doctor.id) {
       throw new Error("Forbidden: You are not authorized to issue prescriptions for this consultation")
     }
 
@@ -85,88 +97,125 @@ export class PrescriptionService {
     const followUp = data.followUpDate ? new Date(data.followUpDate) : null
     const clinic = appointment.clinic || doctor.clinic
 
-    try {
-      // 1. Generate PDF in-memory Buffer using PDFKit
-      const pdfBuffer = await this.generatePrescriptionPdf({
-        prescriptionNumber,
-        issuedAt: new Date(),
-        doctor: {
-          name: `Dr. ${doctor.profile.firstName} ${doctor.profile.lastName}`,
-          specialty: doctor.specialty,
-          licenseNumber: doctor.licenseNumber,
-        },
-        clinic: clinic ? {
-          name: clinic.name,
-          address: clinic.address,
-          city: clinic.city,
-          state: clinic.state,
-          phone: clinic.phone,
-        } : undefined,
-        patient: {
-          name: `${appointment.patient?.profile?.firstName || "Sarah"} ${appointment.patient?.profile?.lastName || "Jenkins"}`,
-          gender: appointment.patient?.gender || "Not specified",
-          bloodGroup: appointment.patient?.bloodGroup || "Not specified",
-        },
-        appointmentRef: appointment.bookingReference || "MS-DEMO-01",
-        diagnosis: data.diagnosis,
-        generalInstructions: data.generalInstructions || "Take medications as prescribed.",
-        followUpDate: data.followUpDate,
-        items: data.items,
-      })
+    if (!isOfflineDb || prodMode) {
+      try {
+        // 1. Generate PDF in-memory Buffer using PDFKit
+        const pdfBuffer = await this.generatePrescriptionPdf({
+          prescriptionNumber,
+          issuedAt: new Date(),
+          doctor: {
+            name: `Dr. ${doctor.profile.firstName} ${doctor.profile.lastName}`,
+            specialty: doctor.specialty,
+            licenseNumber: doctor.licenseNumber,
+          },
+          clinic: clinic ? {
+            name: clinic.name,
+            address: clinic.address,
+            city: clinic.city,
+            state: clinic.state,
+            phone: clinic.phone,
+          } : undefined,
+          patient: {
+            name: `${appointment.patient?.profile?.firstName || "Sarah"} ${appointment.patient?.profile?.lastName || "Jenkins"}`,
+            gender: appointment.patient?.gender || "Not specified",
+            bloodGroup: appointment.patient?.bloodGroup || "Not specified",
+          },
+          appointmentRef: appointment.bookingReference || "MS-DEMO-01",
+          diagnosis: data.diagnosis,
+          generalInstructions: data.generalInstructions || "Take medications as prescribed.",
+          followUpDate: data.followUpDate,
+          items: data.items,
+        })
 
-      // 2. Upload PDF to private Supabase Storage
-      const storagePath = `prescriptions/${appointment.patientId}/${prescriptionNumber}.pdf`
-      const supabase = getSupabaseAdmin()
-      if (supabase) {
-        try {
-          await supabase.storage
+        // 2. Upload PDF to private Supabase Storage
+        const storagePath = `prescriptions/${appointment.patientId}/${prescriptionNumber}.pdf`
+        const supabase = getSupabaseAdmin()
+        let uploadedToStorage = false
+        if (prodMode && !supabase) {
+          throw new Error("Storage service is not configured for prescription PDFs")
+        }
+        if (supabase) {
+          const { error: uploadError } = await supabase.storage
             .from(STORAGE_BUCKET)
             .upload(storagePath, pdfBuffer, {
               contentType: "application/pdf",
               upsert: true,
             })
-        } catch (_) {}
-      }
+          if (uploadError) {
+            if (prodMode) {
+              throw new Error(`Storage upload failed for prescription PDF: ${uploadError.message}`)
+            }
+            console.warn("Storage upload warning for prescription PDF:", uploadError.message)
+          } else {
+            uploadedToStorage = true
+          }
+        }
 
-      // 3. Save Prescription & Items to Database
-      const prescription = await prisma.prescription.create({
-        data: {
-          prescriptionNumber,
-          appointmentId: data.appointmentId,
-          patientId: appointment.patientId,
-          doctorId: doctor.id,
-          clinicId: clinic?.id || null,
-          diagnosis: data.diagnosis,
-          generalInstructions: data.generalInstructions || null,
-          followUpDate: followUp,
-          pdfStoragePath: storagePath,
-          items: {
-            create: data.items.map((item) => ({
-              medicineName: item.medicineName,
-              dosage: item.dosage,
-              frequency: item.frequency,
-              duration: item.duration,
-              instructions: item.instructions || null,
-            })),
-          },
-        },
-        include: {
-          items: true,
-          doctor: {
-            include: {
-              profile: { select: { firstName: true, lastName: true } },
+        // 3. Save Prescription & Items to Database
+        let prescription
+        try {
+          prescription = await prisma.prescription.create({
+            data: {
+              prescriptionNumber,
+              appointmentId: data.appointmentId,
+              patientId: appointment.patientId,
+              doctorId: doctor.id,
+              clinicId: clinic?.id || null,
+              diagnosis: data.diagnosis,
+              generalInstructions: data.generalInstructions || null,
+              followUpDate: followUp,
+              pdfStoragePath: storagePath,
+              items: {
+                create: data.items.map((item) => ({
+                  medicineName: item.medicineName,
+                  dosage: item.dosage,
+                  frequency: item.frequency,
+                  duration: item.duration,
+                  instructions: item.instructions || null,
+                })),
+              },
             },
-          },
-        },
-      })
+            include: {
+              items: true,
+              doctor: {
+                include: {
+                  profile: { select: { firstName: true, lastName: true } },
+                },
+              },
+            },
+          })
+        } catch (dbErr) {
+          if (prodMode && uploadedToStorage && supabase) {
+            await supabase.storage.from(STORAGE_BUCKET).remove([storagePath]).catch(() => {})
+          }
+          throw dbErr
+        }
 
-      return prescription
-    } catch (_) {
-      // Prisma offline fallback
+        try {
+          await prisma.auditLog.create({
+            data: {
+              profileId: doctorProfileId,
+              action: "PRESCRIPTION_ISSUED",
+              resourceTable: "prescriptions",
+              resourceId: prescription.id,
+              ipAddress: ipAddress || null,
+              userAgent: userAgent || null,
+            },
+          })
+        } catch (auditErr) {
+          console.warn("Audit log warning on prescription create:", auditErr)
+        }
+
+        return prescription
+      } catch (err) {
+        if (prodMode) {
+          throw err
+        }
+      }
     }
 
     // Production Safety Guard: Never accept prescriptions without persistent storage
-    if (process.env.NODE_ENV === "production") {
+    if (prodMode) {
       throw new Error("Prescription storage service is temporarily unavailable. Cannot issue prescriptions without persistent database storage.")
     }
 

@@ -1,8 +1,7 @@
-import { PrismaClient } from "@prisma/client"
+import { prisma } from "../config/db.js"
 import { getSupabaseAdmin } from "../config/supabase.js"
 import { config } from "../config/env.js"
 
-const prisma = new PrismaClient()
 const STORAGE_BUCKET = "medical-records"
 
 export class AppError extends Error {
@@ -21,6 +20,9 @@ interface HttpFetchOptions {
 }
 
 async function callAiService(endpoint: string, options: HttpFetchOptions = { method: "GET" }): Promise<any> {
+  if (!config.aiServiceUrl) {
+    throw new AppError("AI service URL is not configured on the server.", 503)
+  }
   const url = `${config.aiServiceUrl}${endpoint}`
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

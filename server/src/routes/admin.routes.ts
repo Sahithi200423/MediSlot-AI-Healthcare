@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express"
 import { prisma } from "../config/db.js"
+import { isProdEnv } from "../config/env.js"
 import { authenticate, requireRole } from "../middleware/auth.js"
 
 const router = Router()
@@ -49,7 +50,14 @@ router.get("/stats", authenticate, requireRole(["PLATFORM_ADMIN"]), async (_req:
       },
     })
   } catch (err: any) {
-    // Offline DB Fallback
+    if (isProdEnv()) {
+      res.status(500).json({
+        success: false,
+        error: { message: err.message || "Failed to fetch platform stats", statusCode: 500 },
+      })
+      return
+    }
+    // Non-production offline DB fallback
     res.status(200).json({
       success: true,
       data: {
@@ -90,7 +98,14 @@ router.get("/audit-logs", authenticate, requireRole(["PLATFORM_ADMIN"]), async (
       data: { logs, total: logs.length },
     })
   } catch (err: any) {
-    // Offline DB Fallback
+    if (isProdEnv()) {
+      res.status(500).json({
+        success: false,
+        error: { message: err.message || "Failed to fetch audit logs", statusCode: 500 },
+      })
+      return
+    }
+    // Non-production offline DB fallback
     const fallbackLogs = [
       { id: "audit-01", action: "CLINIC_VERIFIED", resourceTable: "clinics", resourceId: "clinic-metro-001", createdAt: new Date().toISOString(), profile: { firstName: "David", lastName: "Sterling", role: "PLATFORM_ADMIN" } },
       { id: "audit-02", action: "MEDICAL_RECORD_UPLOADED", resourceTable: "medical_records", resourceId: "rec-001", createdAt: new Date().toISOString(), profile: { firstName: "Sarah", lastName: "Jenkins", role: "PATIENT" } },
@@ -184,17 +199,12 @@ router.patch(
         data: { clinic: updated },
       })
     } catch (err: any) {
-      const clinicId = req.params.clinicId as string
-      const { isVerified } = req.body
-      res.status(200).json({
-        success: true,
-        message: `Clinic is now ${Boolean(isVerified) ? "verified" : "unverified"}`,
-        data: {
-          clinic: {
-            id: clinicId,
-            name: "MediSlot Central Metro Clinic",
-            isVerified: Boolean(isVerified),
-          },
+      const statusCode = err?.code === "P2025" ? 404 : 500
+      res.status(statusCode).json({
+        success: false,
+        error: {
+          message: err?.code === "P2025" ? "Clinic not found" : (err.message || "Failed to update clinic verification"),
+          statusCode,
         },
       })
     }

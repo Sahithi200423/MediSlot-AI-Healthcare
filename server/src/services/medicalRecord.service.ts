@@ -1,9 +1,10 @@
-import { PrismaClient, MedicalRecordCategory, ScanStatus } from "@prisma/client"
+import { MedicalRecordCategory, ScanStatus } from "@prisma/client"
 import crypto from "crypto"
+import { prisma } from "../config/db.js"
+import { isProdEnv } from "../config/env.js"
 import { getSupabaseAdmin } from "../config/supabase.js"
 import { UploadRecordMetadataInput, GrantDoctorAccessInput } from "../validators/medical.validator.js"
 
-const prisma = new PrismaClient()
 const STORAGE_BUCKET = "medical-records"
 const SIGNED_URL_EXPIRES_IN = 300 // 5 minutes
 
@@ -111,6 +112,8 @@ export class MedicalRecordService {
       throw new Error("Supabase Storage is not configured")
     }
 
+    const prodMode = isProdEnv()
+
     // 1. Resolve Patient
     let patientId = metadata.patientId
     if (!patientId) {
@@ -119,8 +122,13 @@ export class MedicalRecordService {
           where: { profileId: uploaderProfileId },
         })
         if (patient) patientId = patient.id
-      } catch (_) {}
+      } catch (err) {
+        if (prodMode) throw err
+      }
       if (!patientId) {
+        if (prodMode) {
+          throw new Error("Patient profile not found. Please complete your patient profile before uploading records.")
+        }
         patientId = "00000000-0000-4000-a000-000000000003"
       }
     } else {
@@ -170,55 +178,63 @@ export class MedicalRecordService {
     const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")
     const storagePath = `patients/${patientId}/${uniqueId}_${sanitizedName}`
 
-    try {
-      if (supabase) {
-        const { error: uploadError } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .upload(storagePath, file.buffer, {
-            contentType: file.mimetype,
-            upsert: false,
-          })
+    const { error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(storagePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      })
 
-        if (!uploadError) {
-          // 6. Save Record Metadata in Database
-          const record = await prisma.medicalRecord.create({
+    if (uploadError) {
+      if (prodMode) {
+        throw new Error(`Storage upload failed: ${uploadError.message}`)
+      }
+    } else {
+      try {
+        // 6. Save Record Metadata in Database
+        const record = await prisma.medicalRecord.create({
+          data: {
+            patientId,
+            uploadedByProfileId: uploaderProfileId,
+            title: metadata.title,
+            description: metadata.description || null,
+            category: (metadata.category as MedicalRecordCategory) || MedicalRecordCategory.OTHER,
+            fileName: file.originalname,
+            storagePath,
+            fileType: file.mimetype,
+            fileSize: file.size,
+            scanStatus,
+          },
+        })
+
+        // 7. Audit Log Entry
+        try {
+          await prisma.auditLog.create({
             data: {
-              patientId: patientId || "demo-patient-001",
-              uploadedByProfileId: uploaderProfileId,
-              title: metadata.title,
-              description: metadata.description || null,
-              category: (metadata.category as MedicalRecordCategory) || MedicalRecordCategory.OTHER,
-              fileName: file.originalname,
-              storagePath,
-              fileType: file.mimetype,
-              fileSize: file.size,
-              scanStatus,
+              profileId: uploaderProfileId,
+              action: "MEDICAL_RECORD_UPLOADED",
+              resourceTable: "medical_records",
+              resourceId: record.id,
+              ipAddress: ipAddress || null,
+              userAgent: userAgent || null,
             },
           })
+        } catch (auditErr) {
+          console.warn("Audit log creation warning:", auditErr)
+        }
 
-          // 7. Audit Log Entry
-          try {
-            await prisma.auditLog.create({
-              data: {
-                profileId: uploaderProfileId,
-                action: "MEDICAL_RECORD_UPLOADED",
-                resourceTable: "medical_records",
-                resourceId: record.id,
-                ipAddress: ipAddress || null,
-                userAgent: userAgent || null,
-              },
-            })
-          } catch (_) {}
-
-          return record
+        return record
+      } catch (dbErr) {
+        if (prodMode) {
+          // Best-effort cleanup of orphaned file before propagating DB error
+          await supabase.storage.from(STORAGE_BUCKET).remove([storagePath]).catch(() => {})
+          throw dbErr
         }
       }
-    } catch (_) {
-      // Supabase storage or Prisma offline fallback
     }
 
     // Production Safety Guard: Never accept medical records without persistent storage
-    if (process.env.NODE_ENV === "production") {
+    if (prodMode) {
       throw new Error("Medical storage service is temporarily unavailable. Cannot securely store medical records without persistent encrypted storage.")
     }
 

@@ -6,7 +6,7 @@ services:
     rootDir: server
     plan: free
     region: oregon
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: node dist/index.js
     healthCheckPath: /api/health
     envVars:
@@ -29,7 +29,7 @@ services:
       - key: AI_SERVICE_URL
         sync: false
       - key: AI_SERVICE_SECRET
-        generateValue: true
+        sync: false
 
   # 2. Python FastAPI Clinical AI Microservice
   - type: web

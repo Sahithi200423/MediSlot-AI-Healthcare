@@ -1,7 +1,7 @@
 import express from "express"
 import cors from "cors"
 import morgan from "morgan"
-import { config } from "./config/env.js"
+import { config, getAllowedOrigins } from "./config/env.js"
 import apiRouter from "./routes/index.js"
 import { notFoundHandler } from "./middleware/notFound.js"
 import { errorHandler } from "./middleware/errorHandler.js"
@@ -12,30 +12,21 @@ const app = express()
 app.use(morgan(config.nodeEnv === "development" ? "dev" : "combined"))
 
 // 2. CORS Configuration
-const allowedOrigins = [
-  ...config.frontendUrl.split(",").map((u) => u.trim().replace(/\/$/, "")),
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "http://localhost:5174",
-  "http://127.0.0.1:5174",
-]
-
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, or Postman)
+      // Allow requests with no origin (like health checks, curl, or server-to-server)
       if (!origin) {
         return callback(null, true)
       }
       const cleanOrigin = origin.replace(/\/$/, "")
-      if (
-        allowedOrigins.includes(cleanOrigin) ||
-        cleanOrigin.endsWith(".pages.dev") ||
-        cleanOrigin.endsWith(".vercel.app")
-      ) {
+      const allowedOrigins = getAllowedOrigins()
+      if (allowedOrigins.includes(cleanOrigin)) {
         callback(null, true)
       } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS`))
+        const err: any = new Error(`Origin ${origin} not allowed by CORS`)
+        err.statusCode = 403
+        callback(err)
       }
     },
     credentials: true,
@@ -66,11 +57,11 @@ app.use(notFoundHandler)
 app.use(errorHandler)
 
 // 6. Start Server
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, "0.0.0.0", () => {
   console.log(`\n=================================================`)
   console.log(`🏥 MediSlot Core Backend API running successfully!`)
-  console.log(`📡 URL: http://localhost:${config.port}`)
-  console.log(`🩺 Health Check: http://localhost:${config.port}/api/health`)
+  console.log(`📡 URL: http://0.0.0.0:${config.port}`)
+  console.log(`🩺 Health Check: /api/health`)
   console.log(`⚙️  Environment: ${config.nodeEnv}`)
   console.log(`=================================================\n`)
 })

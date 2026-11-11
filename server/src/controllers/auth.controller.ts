@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express"
 import { AuthService } from "../services/auth.service.js"
 import { registerSchema, loginSchema, forgotPasswordSchema } from "../validators/auth.validator.js"
 import { getSupabaseAdmin } from "../config/supabase.js"
+import { getAllowedOrigins } from "../config/env.js"
 
 export class AuthController {
   public static async register(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -85,9 +86,13 @@ export class AuthController {
       const supabase = getSupabaseAdmin()
 
       if (supabase) {
-        await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${req.headers.origin || "http://localhost:5173"}/reset-password`,
-        })
+        const allowed = getAllowedOrigins()
+        const reqOrigin = req.headers.origin?.replace(/\/$/, "")
+        const safeOrigin = reqOrigin && allowed.includes(reqOrigin) ? reqOrigin : allowed[0]
+        await supabase.auth.resetPasswordForEmail(
+          email,
+          safeOrigin ? { redirectTo: `${safeOrigin}/reset-password` } : undefined
+        )
       }
 
       res.status(200).json({

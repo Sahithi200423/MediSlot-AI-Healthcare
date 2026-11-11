@@ -1,8 +1,8 @@
 import crypto from "crypto"
-import { PrismaClient, NoteStatus } from "@prisma/client"
+import { NoteStatus } from "@prisma/client"
+import { prisma } from "../config/db.js"
+import { isProdEnv } from "../config/env.js"
 import { SoapClinicalNoteInput, UpdateSoapClinicalNoteInput } from "../validators/medical.validator.js"
-
-const prisma = new PrismaClient()
 
 export class ClinicalNoteService {
   /**
@@ -15,14 +15,19 @@ export class ClinicalNoteService {
     ipAddress?: string,
     userAgent?: string
   ) {
+    const prodMode = isProdEnv()
     let doctor = null
+    let isOfflineDb = false
     try {
       doctor = await prisma.doctor.findUnique({
         where: { profileId: doctorProfileId },
       })
-    } catch (_) {}
+    } catch (err) {
+      if (prodMode) throw err
+      isOfflineDb = true
+    }
 
-    if (!doctor && (doctorProfileId === "00000000-0000-4000-a000-000000000005" || doctorProfileId === "demo-doctor-001")) {
+    if (!doctor && !prodMode && isOfflineDb && (doctorProfileId === "00000000-0000-4000-a000-000000000005" || doctorProfileId === "demo-doctor-001")) {
       doctor = { id: "00000000-0000-4000-a000-000000000002", profileId: doctorProfileId } as any
     }
 
@@ -39,9 +44,12 @@ export class ClinicalNoteService {
           doctor: { include: { profile: true } },
         },
       })
-    } catch (_) {}
+    } catch (err) {
+      if (prodMode) throw err
+      isOfflineDb = true
+    }
 
-    if (!appointment) {
+    if (!appointment && !prodMode && isOfflineDb) {
       appointment = {
         id: data.appointmentId,
         doctorId: doctor.id,
@@ -49,59 +57,83 @@ export class ClinicalNoteService {
       } as any
     }
 
+    if (!appointment) {
+      throw new Error("Appointment not found")
+    }
+
     // Verify assigned doctor
-    if (appointment.doctorId && appointment.doctorId !== doctor.id && appointment.doctorId !== "doc-jenkins-001") {
+    if (appointment.doctorId !== doctor.id) {
       throw new Error("Forbidden: You are not the assigned doctor for this consultation")
     }
 
-    try {
-      // Check if a clinical note already exists for this appointment
-      const existing = await prisma.clinicalNote.findUnique({
-        where: { appointmentId: data.appointmentId },
-      })
-      if (existing) {
-        throw new Error("A clinical note has already been created for this appointment. Please update the existing note instead.")
-      }
+    if (!isOfflineDb || prodMode) {
+      try {
+        // Check if a clinical note already exists for this appointment
+        const existing = await prisma.clinicalNote.findUnique({
+          where: { appointmentId: data.appointmentId },
+        })
+        if (existing) {
+          throw new Error("A clinical note has already been created for this appointment. Please update the existing note instead.")
+        }
 
-      const isFinalized = data.status === "FINALIZED"
-      const now = new Date()
+        const isFinalized = data.status === "FINALIZED"
+        const now = new Date()
 
-      const note = await prisma.clinicalNote.create({
-        data: {
-          appointmentId: data.appointmentId,
-          patientId: appointment.patientId || "demo-patient-001",
-          doctorId: doctor.id,
-          subjective: data.subjective,
-          objective: data.objective,
-          assessment: data.assessment,
-          plan: data.plan,
-          status: isFinalized ? NoteStatus.FINALIZED : NoteStatus.DRAFT,
-          finalizedAt: isFinalized ? now : null,
-          finalizedByProfileId: isFinalized ? doctorProfileId : null,
-        },
-        include: {
-          doctor: {
-            include: {
-              profile: { select: { firstName: true, lastName: true } },
+        const note = await prisma.clinicalNote.create({
+          data: {
+            appointmentId: data.appointmentId,
+            patientId: appointment.patientId,
+            doctorId: doctor.id,
+            subjective: data.subjective,
+            objective: data.objective,
+            assessment: data.assessment,
+            plan: data.plan,
+            status: isFinalized ? NoteStatus.FINALIZED : NoteStatus.DRAFT,
+            finalizedAt: isFinalized ? now : null,
+            finalizedByProfileId: isFinalized ? doctorProfileId : null,
+          },
+          include: {
+            doctor: {
+              include: {
+                profile: { select: { firstName: true, lastName: true } },
+              },
+            },
+            patient: {
+              include: {
+                profile: { select: { firstName: true, lastName: true } },
+              },
             },
           },
-          patient: {
-            include: {
-              profile: { select: { firstName: true, lastName: true } },
-            },
-          },
-        },
-      })
+        })
 
-      return note
-    } catch (dbErr: any) {
-      if (dbErr.message && dbErr.message.includes("already been created")) {
-        throw dbErr
+        try {
+          await prisma.auditLog.create({
+            data: {
+              profileId: doctorProfileId,
+              action: isFinalized ? "CLINICAL_NOTE_FINALIZED" : "CLINICAL_NOTE_DRAFT_CREATED",
+              resourceTable: "clinical_notes",
+              resourceId: note.id,
+              ipAddress: ipAddress || null,
+              userAgent: userAgent || null,
+            },
+          })
+        } catch (auditErr) {
+          console.warn("Audit log warning on clinical note create:", auditErr)
+        }
+
+        return note
+      } catch (dbErr: any) {
+        if (prodMode) {
+          throw dbErr
+        }
+        if (dbErr.message && dbErr.message.includes("already been created")) {
+          throw dbErr
+        }
       }
     }
 
     // Production Safety Guard: Never accept clinical notes without persistent storage
-    if (process.env.NODE_ENV === "production") {
+    if (prodMode) {
       throw new Error("Database service is temporarily unavailable. Cannot finalize clinical notes without persistent database storage.")
     }
 

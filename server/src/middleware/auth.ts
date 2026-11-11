@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express"
 import jwt from "jsonwebtoken"
-import { config } from "../config/env.js"
+import { config, isProdEnv } from "../config/env.js"
 import { getSupabaseAdmin } from "../config/supabase.js"
 import { prisma } from "../config/db.js"
 
@@ -48,26 +48,41 @@ export async function authenticate(
   const token = authHeader.split(" ")[1]
 
   try {
-    // 1. Check local JWT signature first (fast, resilient to external network outages)
-    try {
-      const decoded = jwt.verify(token, config.jwtSecret) as any
-      if (decoded && decoded.id) {
-        req.user = {
-          id: decoded.id,
-          email: decoded.email || "",
-          role: decoded.role || "PATIENT",
-          firstName: decoded.firstName || "Demo",
-          lastName: decoded.lastName || "User",
-          clinicId: decoded.clinicId || null,
-          clinicIds: decoded.clinicId ? [decoded.clinicId] : (decoded.clinicIds || []),
+    const prodMode = isProdEnv()
+
+    // 1. Local dev JWT verification ONLY outside production
+    if (!prodMode) {
+      try {
+        const decoded = jwt.verify(token, config.jwtSecret) as any
+        if (decoded && decoded.id) {
+          req.user = {
+            id: decoded.id,
+            email: decoded.email || "",
+            role: decoded.role || "PATIENT",
+            firstName: decoded.firstName || "Demo",
+            lastName: decoded.lastName || "User",
+            clinicId: decoded.clinicId || null,
+            clinicIds: decoded.clinicId ? [decoded.clinicId] : (decoded.clinicIds || []),
+          }
+          return next()
         }
-        return next()
+      } catch (_) {
+        // Not a local dev token or expired, try Supabase next
       }
-    } catch (_) {
-      // Not a local secret token or expired, try Supabase next
     }
 
     const supabase = getSupabaseAdmin()
+
+    if (prodMode && !supabase) {
+      res.status(503).json({
+        success: false,
+        error: {
+          message: "Authentication service is not configured.",
+          statusCode: 503,
+        },
+      })
+      return
+    }
 
     // 2. Supabase Auth Token Verification (Production / Live Supabase Mode)
     if (supabase) {
@@ -85,7 +100,17 @@ export async function authenticate(
               },
             })
           } catch (dbErr) {
-            // Fallback to metadata if DB read encounters transient error
+            if (prodMode) {
+              res.status(503).json({
+                success: false,
+                error: {
+                  message: "Database unavailable while verifying user permissions.",
+                  statusCode: 503,
+                },
+              })
+              return
+            }
+            // Non-production dev tolerance when DB is offline
           }
 
           const role = (profile?.role || user.user_metadata?.role || "PATIENT") as UserRole
@@ -109,7 +134,16 @@ export async function authenticate(
           return next()
         }
       } catch (sbErr) {
-        // Supabase network error
+        if (prodMode) {
+          res.status(503).json({
+            success: false,
+            error: {
+              message: "Authentication service temporarily unreachable.",
+              statusCode: 503,
+            },
+          })
+          return
+        }
       }
     }
 
