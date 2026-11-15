@@ -7,7 +7,7 @@ import {
 import { toast } from "sonner"
 import { DashboardShell, type NavItem } from "@/components/layout/DashboardShell"
 import { useAuth } from "@/context/AuthContext"
-import { api, type Clinic, type Appointment } from "@/lib/api"
+import { api, API_BASE, type Clinic, type Appointment } from "@/lib/api"
 
 export function PlatformAdminDashboard() {
   const { user } = useAuth()
@@ -152,7 +152,7 @@ export function PlatformAdminDashboard() {
     try {
       setIsPinging(true)
       const t0 = performance.now()
-      const res = await fetch("http://localhost:5000/api/health")
+      const res = await fetch(`${API_BASE}/health`)
       const t1 = performance.now()
       if (res.ok) {
         setPingLatency(Math.round(t1 - t0))

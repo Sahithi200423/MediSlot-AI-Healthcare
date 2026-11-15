@@ -8,7 +8,7 @@ import {
 import { toast } from "sonner"
 import { DashboardShell, type NavItem } from "@/components/layout/DashboardShell"
 import { useAuth } from "@/context/AuthContext"
-import { api, type Doctor, type Appointment } from "@/lib/api"
+import { api, API_BASE, type Doctor, type Appointment } from "@/lib/api"
 import { SoapNoteEditorModal } from "@/components/medical/SoapNoteEditorModal"
 import { PrescriptionBuilderModal } from "@/components/medical/PrescriptionBuilderModal"
 import { AiCopilotModal } from "@/components/ai/AiCopilotModal"
@@ -185,7 +185,7 @@ export function DoctorDashboard() {
     try {
       setIsOnboarding(true)
       const token = localStorage.getItem("medislot_token")
-      const res = await fetch("http://localhost:5000/api/doctors", {
+      const res = await fetch(`${API_BASE}/doctors`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -255,7 +255,7 @@ export function DoctorDashboard() {
     try {
       setIsUpdatingProfile(true)
       const token = localStorage.getItem("medislot_token")
-      const res = await fetch(`http://localhost:5000/api/doctors/${doctor.id}`, {
+      const res = await fetch(`${API_BASE}/doctors/${doctor.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
