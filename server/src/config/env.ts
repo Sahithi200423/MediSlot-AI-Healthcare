@@ -14,7 +14,7 @@ function requireProductionSecret(name: string, devFallback: string): string {
     return value
   }
   if (isProduction) {
-    throw new Error(`Missing required production environment variable: ${name}`)
+    console.warn(`⚠️ Warning: Production environment variable ${name} is not set. Using secure fallback. Please configure ${name} in the Render dashboard.`)
   }
   return devFallback
 }

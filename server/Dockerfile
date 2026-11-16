@@ -15,6 +15,7 @@ COPY . .
 # Explicitly generate Prisma client and build TypeScript
 RUN npm run build
 
-EXPOSE 5000
+ENV PORT=10000
+EXPOSE 10000
 
 CMD ["node", "dist/index.js"]
