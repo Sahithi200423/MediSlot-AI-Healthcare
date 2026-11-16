@@ -40,7 +40,10 @@ app.use(
 app.use(express.json({ limit: "10mb" }))
 app.use(express.urlencoded({ extended: true, limit: "10mb" }))
 
-// 4. Direct Health Check & Root Endpoints
+// 4. API Routes
+app.use("/api", apiRouter)
+
+// Direct Health Check aliases (guarantees root-level and subrouter availability)
 app.get("/api/health", HealthController.check)
 app.get("/health", HealthController.check)
 
@@ -53,9 +56,6 @@ app.get("/", (req, res) => {
     healthCheck: "/api/health",
   })
 })
-
-// 5. API Routes
-app.use("/api", apiRouter)
 
 // 5. 404 & Centralized Error Handlers
 app.use(notFoundHandler)

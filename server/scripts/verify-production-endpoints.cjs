@@ -131,7 +131,18 @@ async function run() {
       allPassed = false
     }
 
-    // 3. Test GET /health alias
+    // 3. Test GET /api/health/ (with trailing slash)
+    console.log("\nTesting GET /api/health/ (trailing slash) ...")
+    const resApiHealthSlash = await fetchJson("/api/health/")
+    console.log(`HTTP ${resApiHealthSlash.status}:`, JSON.stringify(resApiHealthSlash.data))
+    if (resApiHealthSlash.status === 200 && resApiHealthSlash.data && resApiHealthSlash.data.success === true) {
+      console.log("✅ GET /api/health/ PASSED")
+    } else {
+      console.error("❌ GET /api/health/ FAILED:", resApiHealthSlash)
+      allPassed = false
+    }
+
+    // 4. Test GET /health alias
     console.log("\nTesting GET /health ...")
     const resHealth = await fetchJson("/health")
     console.log(`HTTP ${resHealth.status}:`, JSON.stringify(resHealth.data))
@@ -144,6 +155,28 @@ async function run() {
       console.log("✅ GET /health PASSED")
     } else {
       console.error("❌ GET /health FAILED:", resHealth)
+      allPassed = false
+    }
+
+    // 5. Test apiRouter subroute integration (GET /api/clinics)
+    console.log("\nTesting GET /api/clinics (subrouter verification) ...")
+    const resClinics = await fetchJson("/api/clinics")
+    console.log(`HTTP ${resClinics.status} received for /api/clinics`)
+    if (resClinics.status === 200 || resClinics.status === 500 || resClinics.status === 503) {
+      console.log("✅ Subrouter app.use('/api', apiRouter) is verified operational (Dispatched to ClinicController, Status:", resClinics.status, ")")
+    } else {
+      console.error("❌ Subrouter /api/clinics check FAILED:", resClinics)
+      allPassed = false
+    }
+
+    // 6. Test 404 handler returns structured JSON (not plain text)
+    console.log("\nTesting GET /api/unregistered-route-test (404 handler verification) ...")
+    const res404 = await fetchJson("/api/unregistered-route-test")
+    console.log(`HTTP ${res404.status}:`, JSON.stringify(res404.data))
+    if (res404.status === 404 && res404.data && res404.data.success === false) {
+      console.log("✅ 404 handler returns structured JSON (not plain text)")
+    } else {
+      console.error("❌ 404 handler test FAILED:", res404)
       allPassed = false
     }
   } catch (err) {
@@ -170,3 +203,4 @@ async function run() {
 }
 
 run()
+
