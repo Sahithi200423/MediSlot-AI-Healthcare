@@ -2,6 +2,7 @@ import express from "express"
 import cors from "cors"
 import morgan from "morgan"
 import { config, getAllowedOrigins } from "./config/env.js"
+import { HealthController } from "./controllers/health.controller.js"
 import apiRouter from "./routes/index.js"
 import { notFoundHandler } from "./middleware/notFound.js"
 import { errorHandler } from "./middleware/errorHandler.js"
@@ -39,8 +40,9 @@ app.use(
 app.use(express.json({ limit: "10mb" }))
 app.use(express.urlencoded({ extended: true, limit: "10mb" }))
 
-// 4. API Routes
-app.use("/api", apiRouter)
+// 4. Direct Health Check & Root Endpoints
+app.get("/api/health", HealthController.check)
+app.get("/health", HealthController.check)
 
 // Root welcome route
 app.get("/", (req, res) => {
@@ -51,6 +53,9 @@ app.get("/", (req, res) => {
     healthCheck: "/api/health",
   })
 })
+
+// 5. API Routes
+app.use("/api", apiRouter)
 
 // 5. 404 & Centralized Error Handlers
 app.use(notFoundHandler)
