@@ -1,12 +1,24 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Activity, Mail, Lock, User, ArrowRight, ShieldCheck, AlertCircle, Info } from "lucide-react"
+import { AnimatePresence, motion } from "framer-motion"
+import {
+  Mail,
+  Lock,
+  User,
+  ArrowRight,
+  ShieldCheck,
+  AlertCircle,
+  Info,
+  ArrowLeft,
+  Check,
+} from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { ThemeToggle } from "@/components/ui/ThemeToggle"
+import { EDITORIAL_EASE, fadeUpVariants } from "@/lib/motion"
 
 export function RegisterPage() {
   const navigate = useNavigate()
@@ -21,18 +33,21 @@ export function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
+  const hasMinLength = password.length >= 8
+  const hasUppercase = /[A-Z]/.test(password)
+  const hasNumber = /[0-9]/.test(password)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setErrorMessage(null)
 
-    // Client-side quick password validation
-    if (password.length < 8) {
+    if (!hasMinLength) {
       setErrorMessage("Password must be at least 8 characters long")
       setIsLoading(false)
       return
     }
-    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+    if (!hasUppercase || !hasNumber) {
       setErrorMessage("Password must contain at least one uppercase letter and one number")
       setIsLoading(false)
       return
@@ -62,137 +77,217 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-950">
-      <div className="absolute top-4 right-4">
+    <div className="min-h-screen relative flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-[#fbf9f5] dark:bg-[#141210] font-editorial-sans transition-colors overflow-hidden">
+      {/* Top Bar */}
+      <div className="absolute top-4 left-4 right-4 max-w-6xl mx-auto flex items-center justify-between">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6e6059] hover:text-[#cb6440] dark:text-[#c4b5a8] transition-colors px-3 py-1.5 rounded-full hover:bg-[#f5f1e9] dark:hover:bg-[#26211d]"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Back to Home</span>
+        </Link>
         <ThemeToggle />
       </div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <Link to="/" className="inline-flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-teal-500 flex items-center justify-center text-white shadow-md shadow-sky-500/20">
-            <Activity className="w-5 h-5" />
-          </div>
-          <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            Medi<span className="text-teal-600 dark:text-teal-400">Slot</span>
+      <motion.div
+        variants={fadeUpVariants}
+        initial="hidden"
+        animate="visible"
+        className="sm:mx-auto sm:w-full sm:max-w-md text-center"
+      >
+        <Link to="/" className="inline-flex items-center justify-center group">
+          <span className="font-editorial-serif text-4xl tracking-tight text-[#1e1815] dark:text-[#fbf9f5] font-normal">
+            medislot<span className="text-[#cb6440]">.</span>
           </span>
         </Link>
-        <h2 className="mt-4 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+        <h1 className="mt-4 font-editorial-serif text-3xl sm:text-4xl font-normal tracking-tight text-[#1e1815] dark:text-[#fbf9f5]">
           Create Patient Account
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Book appointments, view medical records, and access care
+        </h1>
+        <p className="mt-1.5 text-xs text-[#6e6059] dark:text-[#c4b5a8]">
+          Book appointments, store encrypted records, and access care seamlessly
         </p>
-      </div>
+      </motion.div>
 
-      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
-        <Card className="border-slate-200 dark:border-slate-800 shadow-xl">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.42, delay: 0.08, ease: EDITORIAL_EASE }}
+        className="mt-7 sm:mx-auto sm:w-full sm:max-w-md"
+      >
+        <Card className="border-[#e8e2d8] dark:border-[#362f2a] bg-white dark:bg-[#1a1613] shadow-lg shadow-[#1e1815]/5 rounded-3xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Patient Registration</CardTitle>
-            <div className="mt-2 p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-[11px] text-sky-800 dark:text-sky-300 flex items-start gap-2">
-              <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <CardTitle className="text-sm font-bold text-[#1e1815] dark:text-[#fbf9f5]">
+              Patient Registration
+            </CardTitle>
+            <div className="mt-2 p-3 rounded-2xl bg-[#4a6356]/8 dark:bg-[#4a6356]/15 border border-[#4a6356]/20 text-[11px] text-[#3a5245] dark:text-[#b5c99a] flex items-start gap-2.5 leading-relaxed">
+              <Info className="w-4 h-4 shrink-0 mt-0.5 text-[#4a6356] dark:text-[#99aa77]" />
               <span>
-                <strong>Healthcare Security Notice:</strong> Public self-registration provisions Patient accounts. Doctor and Clinic Administrator accounts are provisioned via verified clinic onboarding.
+                <strong>Healthcare Security Notice:</strong> Public self-registration creates Patient accounts. Physician and Clinic Administrator accounts are provisioned via verified clinic onboarding.
               </span>
             </div>
           </CardHeader>
 
           <CardContent className="pt-4">
-            {isRegistered ? (
-              <div className="space-y-4 text-center py-4">
-                <div className="w-12 h-12 rounded-full bg-teal-100 dark:bg-teal-900/50 text-teal-600 flex items-center justify-center mx-auto">
-                  <Mail className="w-6 h-6" />
-                </div>
-                <h3 className="font-bold text-slate-900 dark:text-white">Verify Your Email Address</h3>
-                <p className="text-xs text-slate-500">
-                  A verification confirmation has been registered for <strong className="text-slate-800 dark:text-slate-200">{registeredEmail}</strong>. Please check your email to verify your account before logging in.
-                </p>
-                <Link to="/login">
-                  <Button variant="teal" size="sm" className="w-full mt-2">
-                    Proceed to Login
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <>
-                {errorMessage && (
-                  <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{errorMessage}</span>
+            <AnimatePresence mode="wait">
+              {isRegistered ? (
+                <motion.div
+                  key="registered"
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.28, ease: EDITORIAL_EASE }}
+                  className="space-y-4 text-center py-4"
+                >
+                  <div className="w-12 h-12 rounded-full bg-[#4a6356]/12 text-[#4a6356] flex items-center justify-center mx-auto">
+                    <Mail className="w-6 h-6" />
                   </div>
-                )}
+                  <h2 className="font-editorial-serif text-2xl font-normal text-[#1e1815] dark:text-[#fbf9f5]">
+                    Verify Your Email Address
+                  </h2>
+                  <p className="text-xs text-[#6e6059] dark:text-[#c4b5a8] leading-relaxed">
+                    A verification confirmation has been sent to{" "}
+                    <strong className="text-[#1e1815] dark:text-[#fbf9f5]">{registeredEmail}</strong>.
+                    Please verify your inbox before signing in.
+                  </p>
+                  <Link to="/login" className="block pt-1">
+                    <Button variant="primary" size="sm" className="w-full rounded-full py-2.5">
+                      Proceed to Login
+                    </Button>
+                  </Link>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="register-form"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <AnimatePresence initial={false}>
+                    {errorMessage && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.2 }}
+                        role="alert"
+                        className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300 text-xs flex items-start gap-2"
+                      >
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>{errorMessage}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="First Name"
-                  type="text"
-                  required
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  icon={<User className="w-4 h-4" />}
-                  placeholder="Jane"
-                />
-                <Input
-                  label="Last Name"
-                  type="text"
-                  required
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Smith"
-                />
-              </div>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Input
+                        label="First Name"
+                        type="text"
+                        required
+                        autoComplete="given-name"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        icon={<User className="w-4 h-4" />}
+                        placeholder="Aarav"
+                      />
+                      <Input
+                        label="Last Name"
+                        type="text"
+                        required
+                        autoComplete="family-name"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        placeholder="Sharma"
+                      />
+                    </div>
 
-              <Input
-                label="Email address"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                icon={<Mail className="w-4 h-4" />}
-                placeholder="jane.smith@example.com"
-              />
+                    <Input
+                      label="Email address"
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      icon={<Mail className="w-4 h-4" />}
+                      placeholder="aarav.sharma@example.com"
+                    />
 
-              <Input
-                label="Create Password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                icon={<Lock className="w-4 h-4" />}
-                placeholder="••••••••"
-                helperText="Min 8 characters with at least one uppercase letter and one number"
-              />
+                    <div className="space-y-2">
+                      <Input
+                        label="Create Password"
+                        type="password"
+                        required
+                        autoComplete="new-password"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value)
+                          if (errorMessage) setErrorMessage(null)
+                        }}
+                        icon={<Lock className="w-4 h-4" />}
+                        placeholder="••••••••"
+                      />
 
-              <div className="text-xs text-slate-500 leading-relaxed">
-                By clicking Register, you accept the MediSlot <a href="#" className="text-teal-600 underline">Terms</a> and <a href="#" className="text-teal-600 underline">Privacy Policy</a>.
-              </div>
+                      {/* Live Password Criteria */}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 pt-0.5 text-[11px]">
+                        <span
+                          className={`inline-flex items-center gap-1 transition-colors ${
+                            hasMinLength ? "text-[#4a6356] font-medium" : "text-[#8c7e77]"
+                          }`}
+                        >
+                          <Check className={`w-3 h-3 ${hasMinLength ? "opacity-100" : "opacity-35"}`} />
+                          8+ characters
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 transition-colors ${
+                            hasUppercase ? "text-[#4a6356] font-medium" : "text-[#8c7e77]"
+                          }`}
+                        >
+                          <Check className={`w-3 h-3 ${hasUppercase ? "opacity-100" : "opacity-35"}`} />
+                          1 uppercase
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 transition-colors ${
+                            hasNumber ? "text-[#4a6356] font-medium" : "text-[#8c7e77]"
+                          }`}
+                        >
+                          <Check className={`w-3 h-3 ${hasNumber ? "opacity-100" : "opacity-35"}`} />
+                          1 number
+                        </span>
+                      </div>
+                    </div>
 
-              <Button
-                type="submit"
-                variant="teal"
-                isLoading={isLoading}
-                className="w-full font-semibold shadow-md shadow-teal-600/20"
-              >
-                Create Account & Access Portal <ArrowRight className="w-4 h-4" />
-              </Button>
-            </form>
+                    <p className="text-[11px] text-[#8c7e77] leading-relaxed">
+                      By registering, you acknowledge MediSlot's clinical privacy standards and encrypted health record safeguards.
+                    </p>
 
-            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-center text-xs text-slate-500">
-              Already have an account?{" "}
-              <Link to="/login" className="font-semibold text-teal-600 hover:underline">
-                Sign in here
-              </Link>
-            </div>
-            </>
-            )}
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      isLoading={isLoading}
+                      className="w-full rounded-full py-2.5 font-semibold"
+                    >
+                      Create Account & Access Portal <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </form>
+
+                  <div className="mt-6 pt-4 border-t border-[#ece6dd] dark:border-[#362f2a] text-center text-xs text-[#6e6059] dark:text-[#c4b5a8]">
+                    Already have an account?{" "}
+                    <Link to="/login" className="font-semibold text-[#cb6440] hover:underline">
+                      Sign in here
+                    </Link>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </CardContent>
         </Card>
 
-        <p className="mt-6 text-center text-xs text-slate-400 flex items-center justify-center gap-1.5">
-          <ShieldCheck className="w-4 h-4 text-teal-600" />
+        <p className="mt-6 text-center text-xs text-[#8c7e77] flex items-center justify-center gap-1.5">
+          <ShieldCheck className="w-4 h-4 text-[#4a6356]" />
           <span>Role-Based Access Control Protected</span>
         </p>
-      </div>
+      </motion.div>
     </div>
   )
 }

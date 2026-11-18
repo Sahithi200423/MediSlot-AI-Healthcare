@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react"
+import { AnimatePresence, motion } from "framer-motion"
 import { 
   Building2, BarChart2, Settings, History,
   ShieldCheck, Users, Stethoscope, Search,
-  Filter, CheckCircle2, Activity, RefreshCw
+  Filter, CheckCircle2, Activity, RefreshCw, X
 } from "lucide-react"
 import { toast } from "sonner"
 import { DashboardShell, type NavItem } from "@/components/layout/DashboardShell"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { useAuth } from "@/context/AuthContext"
 import { api, API_BASE, type Clinic, type Appointment } from "@/lib/api"
+import { modalBackdropVariants, modalDialogVariants } from "@/lib/motion"
 
 export function PlatformAdminDashboard() {
   const { user } = useAuth()
@@ -131,6 +134,15 @@ export function PlatformAdminDashboard() {
     if (activeTab === "audit") loadAuditLogs()
   }, [auditTableFilter, activeTab])
 
+  useEffect(() => {
+    if (!selectedClinicToInspect) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedClinicToInspect(null)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [selectedClinicToInspect])
+
   // Handle Toggle Clinic Verification
   const handleToggleVerification = async (clinicId: string, currentStatus: boolean) => {
     try {
@@ -193,10 +205,32 @@ export function PlatformAdminDashboard() {
       onSelectTab={setActiveTab}
     >
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <RefreshCw className="w-6 h-6 animate-spin text-[#cb6440] mb-3" />
-          <p className="font-editorial-serif text-xl text-[#1e1815]">Querying Enterprise Healthcare Topology</p>
-          <p className="text-xs text-[#6e6059] mt-1">Aggregating clinic audits, credentialed medical staff, and platform telemetry...</p>
+        <div className="space-y-8" aria-label="Loading platform overview">
+          <div className="space-y-2 pb-4 border-b border-[#ece6dd]">
+            <Skeleton className="h-9 w-80 max-w-full" />
+            <Skeleton className="h-3.5 w-96 max-w-full" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[0, 1, 2, 3].map((idx) => (
+              <div key={idx} className="p-6 rounded-2xl border border-[#ece6dd] bg-white space-y-3">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-9 w-20" />
+                <Skeleton className="h-3 w-36" />
+              </div>
+            ))}
+          </div>
+          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white space-y-4">
+            <Skeleton className="h-6 w-56" />
+            {[0, 1, 2].map((idx) => (
+              <div key={idx} className="flex items-center justify-between gap-4 py-2 border-t border-[#f2ede4]">
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-3.5 w-48" />
+                  <Skeleton className="h-3 w-64 max-w-full" />
+                </div>
+                <Skeleton rounded="full" className="h-7 w-24 shrink-0" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
         <>
@@ -226,44 +260,44 @@ export function PlatformAdminDashboard() {
 
           {/* Operational Metrics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Clinical Facilities</span>
               <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
                 {stats.totalClinics || clinics.length}
               </p>
               <div className="flex items-center gap-1.5 text-xs text-[#4a6356] mt-3 font-medium">
-                <ShieldCheck className="w-3.5 h-3.5" />
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
                 {stats.verifiedClinicsCount || clinics.filter(c => c.isVerified).length} verified facilities
               </div>
             </div>
 
-            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Licensed Physicians</span>
               <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
                 {stats.totalDoctors || 17}
               </p>
               <div className="flex items-center gap-1.5 text-xs text-[#6e6059] mt-3 font-medium">
-                <Stethoscope className="w-3.5 h-3.5 text-[#cb6440]" /> Across all specialty rosters
+                <Stethoscope className="w-3.5 h-3.5 text-[#cb6440] shrink-0" /> Across all specialty rosters
               </div>
             </div>
 
-            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Registered Patients</span>
               <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
                 {stats.totalPatients || 36}
               </p>
               <div className="flex items-center gap-1.5 text-xs text-[#8c6b3e] mt-3 font-medium">
-                <Users className="w-3.5 h-3.5" /> Verified accounts on platform
+                <Users className="w-3.5 h-3.5 shrink-0" /> Verified accounts on platform
               </div>
             </div>
 
-            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Security Audit Events</span>
               <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
                 {stats.totalAuditLogs || 13}
               </p>
               <div className="flex items-center gap-1.5 text-xs text-[#4a6356] mt-3 font-medium">
-                <Activity className="w-3.5 h-3.5" /> PostgreSQL Audit Log
+                <Activity className="w-3.5 h-3.5 shrink-0" /> PostgreSQL Audit Log
               </div>
             </div>
           </div>
@@ -359,77 +393,140 @@ export function PlatformAdminDashboard() {
             </div>
           </div>
 
-          {/* Facilities Table */}
-          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
-                  <tr>
-                    <th className="p-3.5">Facility Name</th>
-                    <th className="p-3.5">City & Region</th>
-                    <th className="p-3.5">Operating Hours</th>
-                    <th className="p-3.5">Contact Phone</th>
-                    <th className="p-3.5">Status</th>
-                    <th className="p-3.5 text-right">Administrative Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#ece6dd]">
-                  {filteredClinics.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-[#8c7e77]">
-                        No facilities match the search filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredClinics.map(c => (
-                      <tr key={c.id} className="hover:bg-[#fbf9f5]/60 transition-colors">
-                        <td className="p-3.5">
-                          <p className="font-bold text-[#1e1815]">{c.name}</p>
-                          <span className="font-mono text-[10px] text-[#8c7e77]">{c.id.slice(0, 16)}...</span>
-                        </td>
-                        <td className="p-3.5 text-[#6e6059]">
-                          {c.city}, {c.state}
-                        </td>
-                        <td className="p-3.5 text-[#1e1815]">
-                          {c.operatingHours || "08:00 - 18:00"}
-                        </td>
-                        <td className="p-3.5 text-[#8c7e77]">
-                          {c.phone}
-                        </td>
-                        <td className="p-3.5">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
-                            c.isVerified
-                              ? "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
-                              : "bg-[#b58b4c]/10 text-[#8c6b3e] border border-[#b58b4c]/30"
-                          }`}>
-                            {c.isVerified ? "Verified" : "In Review"}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-right space-x-2">
-                          <button
-                            onClick={() => setSelectedClinicToInspect(c)}
-                            className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors"
-                          >
-                            Inspect
-                          </button>
-                          <button
-                            onClick={() => handleToggleVerification(c.id, Boolean(c.isVerified))}
-                            className={`rounded-full px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors ${
-                              c.isVerified
-                                ? "border border-[#e4ded5] text-[#b85633] hover:bg-[#ede6dc]"
-                                : "bg-[#4a6356] hover:bg-[#3d5247] text-white"
-                            }`}
-                          >
-                            {c.isVerified ? "Revoke" : "Verify Facility"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          {/* Facilities: Mobile Cards + Desktop Table */}
+          {filteredClinics.length === 0 ? (
+            <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl space-y-3">
+              <Building2 className="w-8 h-8 text-[#c5a880] mx-auto" />
+              <div>
+                <p className="font-editorial-serif text-xl text-[#1e1815]">No facilities match this filter</p>
+                <p className="text-xs text-[#6e6059] mt-1">Try adjusting your search query or verification status filter.</p>
+              </div>
+              {(clinicSearch || clinicStatusFilter !== "ALL") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClinicSearch("")
+                    setClinicStatusFilter("ALL")
+                  }}
+                  className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              )}
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Mobile Cards */}
+              <div className="space-y-3 md:hidden">
+                {filteredClinics.map(c => (
+                  <div key={c.id} className="p-4 rounded-2xl border border-[#ece6dd] bg-white shadow-2xs space-y-3 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-bold text-[#1e1815] truncate">{c.name}</p>
+                        <p className="text-[11px] text-[#6e6059]">{c.city}, {c.state} • {c.phone}</p>
+                      </div>
+                      <span className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                        c.isVerified
+                          ? "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
+                          : "bg-[#b58b4c]/10 text-[#8c6b3e] border border-[#b58b4c]/30"
+                      }`}>
+                        {c.isVerified ? "Verified" : "In Review"}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#f2ede4]">
+                      <span className="text-[11px] text-[#8c7e77]">{c.operatingHours || "08:00 - 18:00"}</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedClinicToInspect(c)}
+                          className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+                        >
+                          Inspect
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleVerification(c.id, Boolean(c.isVerified))}
+                          className={`rounded-full px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors ${
+                            c.isVerified
+                              ? "border border-[#e4ded5] text-[#b85633] hover:bg-[#ede6dc]"
+                              : "bg-[#4a6356] hover:bg-[#3d5247] text-white"
+                          }`}
+                        >
+                          {c.isVerified ? "Revoke" : "Verify"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
+                      <tr>
+                        <th className="p-3.5">Facility Name</th>
+                        <th className="p-3.5">City & Region</th>
+                        <th className="p-3.5">Operating Hours</th>
+                        <th className="p-3.5">Contact Phone</th>
+                        <th className="p-3.5">Status</th>
+                        <th className="p-3.5 text-right">Administrative Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#ece6dd]">
+                      {filteredClinics.map(c => (
+                        <tr key={c.id} className="hover:bg-[#fbf9f5]/60 transition-colors">
+                          <td className="p-3.5">
+                            <p className="font-bold text-[#1e1815]">{c.name}</p>
+                            <span className="font-mono text-[10px] text-[#8c7e77]">{c.id.slice(0, 16)}...</span>
+                          </td>
+                          <td className="p-3.5 text-[#6e6059]">
+                            {c.city}, {c.state}
+                          </td>
+                          <td className="p-3.5 text-[#1e1815]">
+                            {c.operatingHours || "08:00 - 18:00"}
+                          </td>
+                          <td className="p-3.5 text-[#8c7e77]">
+                            {c.phone}
+                          </td>
+                          <td className="p-3.5">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                              c.isVerified
+                                ? "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
+                                : "bg-[#b58b4c]/10 text-[#8c6b3e] border border-[#b58b4c]/30"
+                            }`}>
+                              {c.isVerified ? "Verified" : "In Review"}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-right space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedClinicToInspect(c)}
+                              className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+                            >
+                              Inspect
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleVerification(c.id, Boolean(c.isVerified))}
+                              className={`rounded-full px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors ${
+                                c.isVerified
+                                  ? "border border-[#e4ded5] text-[#b85633] hover:bg-[#ede6dc]"
+                                  : "bg-[#4a6356] hover:bg-[#3d5247] text-white"
+                              }`}
+                            >
+                              {c.isVerified ? "Revoke" : "Verify Facility"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -542,71 +639,123 @@ export function PlatformAdminDashboard() {
             </div>
           </div>
 
-          {/* Users Table */}
-          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
-                  <tr>
-                    <th className="p-3.5">Name</th>
-                    <th className="p-3.5">Email</th>
-                    <th className="p-3.5">System Role</th>
-                    <th className="p-3.5">Affiliation</th>
-                    <th className="p-3.5">Registered</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#ece6dd]">
-                  {loadingUsers ? (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-[#8c7e77]">
-                        Loading platform user directory...
-                      </td>
-                    </tr>
-                  ) : usersList.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-[#8c7e77]">
-                        No user accounts match the selected role filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    usersList.map((u: any) => (
-                      <tr key={u.id} className="hover:bg-[#fbf9f5]/60 transition-colors">
-                        <td className="p-3.5 font-bold text-[#1e1815]">
-                          {u.firstName} {u.lastName}
-                        </td>
-                        <td className="p-3.5 text-[#6e6059]">{u.email}</td>
-                        <td className="p-3.5">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
-                            u.role === "PLATFORM_ADMIN"
-                              ? "bg-[#6b4c82]/10 text-[#6b4c82] border border-[#6b4c82]/30"
-                              : u.role === "CLINIC_ADMIN"
-                              ? "bg-[#8c6b3e]/10 text-[#8c6b3e] border border-[#8c6b3e]/30"
-                              : u.role === "DOCTOR"
-                              ? "bg-[#cb6440]/10 text-[#cb6440] border border-[#cb6440]/30"
-                              : "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
-                          }`}>
-                            {u.role}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-[#6e6059]">
-                          {u.doctor?.specialty ? (
-                            <span className="text-[#cb6440] font-medium">{u.doctor.specialty}</span>
-                          ) : u.clinicMemberships?.length > 0 ? (
-                            u.clinicMemberships[0].clinic?.name || "Facility Admin"
-                          ) : (
-                            <span className="text-[#8c7e77]">Independent Patient</span>
-                          )}
-                        </td>
-                        <td className="p-3.5 text-[#8c7e77]">
-                          {new Date(u.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          {/* Users: Loading / Empty / Mobile Cards + Desktop Table */}
+          {loadingUsers ? (
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white space-y-3" aria-label="Loading users">
+              {[0, 1, 2, 3].map((idx) => (
+                <div key={idx} className="flex items-center justify-between gap-4 py-2 border-b border-[#f2ede4] last:border-b-0">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-48 hidden sm:block" />
+                  <Skeleton rounded="full" className="h-5 w-20" />
+                </div>
+              ))}
             </div>
-          </div>
+          ) : usersList.length === 0 ? (
+            <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl space-y-3">
+              <Users className="w-8 h-8 text-[#c5a880] mx-auto" />
+              <div>
+                <p className="font-editorial-serif text-xl text-[#1e1815]">No matching user accounts</p>
+                <p className="text-xs text-[#6e6059] mt-1">Adjust your search query or role filter to view platform accounts.</p>
+              </div>
+              {(userSearch || userRoleFilter !== "ALL") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserSearch("")
+                    setUserRoleFilter("ALL")
+                  }}
+                  className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Mobile Cards */}
+              <div className="space-y-3 md:hidden">
+                {usersList.map((u: any) => (
+                  <div key={u.id} className="p-4 rounded-2xl border border-[#ece6dd] bg-white shadow-2xs space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-bold text-[#1e1815] truncate">{u.firstName} {u.lastName}</p>
+                        <p className="text-[11px] text-[#6e6059] truncate">{u.email}</p>
+                      </div>
+                      <span className={`shrink-0 inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                        u.role === "PLATFORM_ADMIN"
+                          ? "bg-[#6b4c82]/10 text-[#6b4c82] border border-[#6b4c82]/30"
+                          : u.role === "CLINIC_ADMIN"
+                          ? "bg-[#8c6b3e]/10 text-[#8c6b3e] border border-[#8c6b3e]/30"
+                          : u.role === "DOCTOR"
+                          ? "bg-[#cb6440]/10 text-[#cb6440] border border-[#cb6440]/30"
+                          : "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
+                      }`}>
+                        {u.role}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-[#f2ede4] text-[11px] text-[#8c7e77]">
+                      <span>
+                        {u.doctor?.specialty || u.clinicMemberships?.[0]?.clinic?.name || "Independent Patient"}
+                      </span>
+                      <span>{new Date(u.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
+                      <tr>
+                        <th className="p-3.5">Name</th>
+                        <th className="p-3.5">Email</th>
+                        <th className="p-3.5">System Role</th>
+                        <th className="p-3.5">Affiliation</th>
+                        <th className="p-3.5">Registered</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#ece6dd]">
+                      {usersList.map((u: any) => (
+                        <tr key={u.id} className="hover:bg-[#fbf9f5]/60 transition-colors">
+                          <td className="p-3.5 font-bold text-[#1e1815]">
+                            {u.firstName} {u.lastName}
+                          </td>
+                          <td className="p-3.5 text-[#6e6059]">{u.email}</td>
+                          <td className="p-3.5">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                              u.role === "PLATFORM_ADMIN"
+                                ? "bg-[#6b4c82]/10 text-[#6b4c82] border border-[#6b4c82]/30"
+                                : u.role === "CLINIC_ADMIN"
+                                ? "bg-[#8c6b3e]/10 text-[#8c6b3e] border border-[#8c6b3e]/30"
+                                : u.role === "DOCTOR"
+                                ? "bg-[#cb6440]/10 text-[#cb6440] border border-[#cb6440]/30"
+                                : "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
+                            }`}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-[#6e6059]">
+                            {u.doctor?.specialty ? (
+                              <span className="text-[#cb6440] font-medium">{u.doctor.specialty}</span>
+                            ) : u.clinicMemberships?.length > 0 ? (
+                              u.clinicMemberships[0].clinic?.name || "Facility Admin"
+                            ) : (
+                              <span className="text-[#8c7e77]">Independent Patient</span>
+                            )}
+                          </td>
+                          <td className="p-3.5 text-[#8c7e77]">
+                            {new Date(u.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -656,11 +805,16 @@ export function PlatformAdminDashboard() {
                 </thead>
                 <tbody className="divide-y divide-[#ece6dd]">
                   {loadingAudit ? (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-[#8c7e77]">
-                        Querying audit log entries from PostgreSQL...
-                      </td>
-                    </tr>
+                    [0, 1, 2, 3].map((idx) => (
+                      <tr key={idx}>
+                        <td className="p-3.5"><Skeleton className="h-3.5 w-32" /></td>
+                        <td className="p-3.5"><Skeleton rounded="full" className="h-5 w-24" /></td>
+                        <td className="p-3.5"><Skeleton className="h-3.5 w-28" /></td>
+                        <td className="p-3.5"><Skeleton className="h-3.5 w-24" /></td>
+                        <td className="p-3.5"><Skeleton className="h-3.5 w-24" /></td>
+                        <td className="p-3.5"><Skeleton className="h-3.5 w-20" /></td>
+                      </tr>
+                    ))
                   ) : auditLogs.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="p-8 text-center text-[#8c7e77]">
@@ -744,71 +898,97 @@ export function PlatformAdminDashboard() {
       {/* ------------------------------------------------------------------- */}
       {/* INSPECT CLINIC DOSSIER MODAL */}
       {/* ------------------------------------------------------------------- */}
-      {selectedClinicToInspect && (
-        <div className="fixed inset-0 z-50 bg-[#1e1815]/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-[#ece6dd] shadow-xl max-w-lg w-full p-6 space-y-5 text-xs font-editorial-sans">
-            <div className="flex items-center justify-between pb-3 border-b border-[#ece6dd]">
-              <div>
-                <h3 className="font-editorial-serif text-2xl text-[#1e1815]">{selectedClinicToInspect.name}</h3>
-                <p className="text-[11px] font-mono text-[#8c7e77]">{selectedClinicToInspect.id}</p>
-              </div>
-              <button
-                onClick={() => setSelectedClinicToInspect(null)}
-                className="text-[#8c7e77] hover:text-[#1e1815] p-1 rounded-full cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
+      <AnimatePresence>
+        {selectedClinicToInspect && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 font-editorial-sans"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Clinic Dossier"
+          >
+            <motion.div
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setSelectedClinicToInspect(null)}
+              className="fixed inset-0 bg-[#1e1815]/50 backdrop-blur-xs"
+            />
 
-            <div className="space-y-3">
-              <div className="p-3 rounded-xl bg-[#fbf9f5] border border-[#ece6dd] grid grid-cols-2 gap-2">
+            <motion.div
+              variants={modalDialogVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="relative z-10 bg-[#fbf9f5] rounded-3xl border border-[#ece6dd] shadow-2xl max-w-lg w-full p-6 space-y-5 text-xs"
+            >
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-[#ece6dd]">
                 <div>
-                  <span className="text-[#8c7e77] block text-[10px]">Location Coordinates</span>
-                  <span className="font-medium text-[#1e1815]">{selectedClinicToInspect.address}</span>
-                  <span className="block text-[10px] text-[#6e6059]">{selectedClinicToInspect.city}, {selectedClinicToInspect.state} {selectedClinicToInspect.postalCode}</span>
+                  <h3 className="font-editorial-serif text-2xl text-[#1e1815]">{selectedClinicToInspect.name}</h3>
+                  <p className="text-[11px] font-mono text-[#8c7e77] break-all">{selectedClinicToInspect.id}</p>
                 </div>
-                <div>
-                  <span className="text-[#8c7e77] block text-[10px]">Administrative Contact</span>
-                  <span className="font-medium text-[#1e1815]">{selectedClinicToInspect.email}</span>
-                  <span className="block text-[10px] text-[#6e6059]">{selectedClinicToInspect.phone}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedClinicToInspect(null)}
+                  aria-label="Close clinic dossier"
+                  className="text-[#8c7e77] hover:text-[#1e1815] hover:bg-[#ede5d9] p-1.5 rounded-full cursor-pointer transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="p-4 rounded-2xl bg-white border border-[#ece6dd] grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-[#8c7e77] block text-[10px] uppercase tracking-wider font-semibold">Location Coordinates</span>
+                    <span className="font-medium text-[#1e1815] block mt-0.5">{selectedClinicToInspect.address}</span>
+                    <span className="block text-[10px] text-[#6e6059]">{selectedClinicToInspect.city}, {selectedClinicToInspect.state} {selectedClinicToInspect.postalCode}</span>
+                  </div>
+                  <div>
+                    <span className="text-[#8c7e77] block text-[10px] uppercase tracking-wider font-semibold">Administrative Contact</span>
+                    <span className="font-medium text-[#1e1815] block mt-0.5 break-all">{selectedClinicToInspect.email}</span>
+                    <span className="block text-[10px] text-[#6e6059]">{selectedClinicToInspect.phone}</span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-[#ece6dd]">
+                  <span className="text-[#8c7e77] block text-[10px] uppercase tracking-wider font-semibold">Facility Verification Status</span>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                      selectedClinicToInspect.isVerified
+                        ? "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
+                        : "bg-[#b58b4c]/10 text-[#8c6b3e] border border-[#b58b4c]/30"
+                    }`}>
+                      {selectedClinicToInspect.isVerified ? "Verified Healthcare Facility" : "Awaiting Administrative Review"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-[#fbf9f5] border border-[#ece6dd]">
-                <span className="text-[#8c7e77] block text-[10px]">Facility Verification Status</span>
-                <div className="mt-1 flex items-center gap-2">
-                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+              <div className="pt-3 flex flex-wrap justify-between items-center gap-2 border-t border-[#ece6dd]">
+                <button
+                  type="button"
+                  onClick={() => handleToggleVerification(selectedClinicToInspect.id, Boolean(selectedClinicToInspect.isVerified))}
+                  className={`rounded-full px-5 py-2 text-xs font-medium cursor-pointer transition-colors shadow-xs ${
                     selectedClinicToInspect.isVerified
-                      ? "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
-                      : "bg-[#b58b4c]/10 text-[#8c6b3e] border border-[#b58b4c]/30"
-                  }`}>
-                    {selectedClinicToInspect.isVerified ? "Verified Healthcare Facility" : "Awaiting Administrative Review"}
-                  </span>
-                </div>
+                      ? "border border-[#e4ded5] bg-white text-[#b85633] hover:bg-[#ede6dc]"
+                      : "bg-[#cb6440] hover:bg-[#b85633] text-white"
+                  }`}
+                >
+                  {selectedClinicToInspect.isVerified ? "Revoke Verification" : "Verify Facility"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedClinicToInspect(null)}
+                  className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-4 py-2 text-xs font-medium cursor-pointer"
+                >
+                  Close
+                </button>
               </div>
-            </div>
-
-            <div className="pt-2 flex justify-between items-center border-t border-[#ece6dd]">
-              <button
-                onClick={() => handleToggleVerification(selectedClinicToInspect.id, Boolean(selectedClinicToInspect.isVerified))}
-                className={`rounded-full px-5 py-2 text-xs font-medium cursor-pointer transition-colors shadow-xs ${
-                  selectedClinicToInspect.isVerified
-                    ? "border border-[#e4ded5] text-[#b85633] hover:bg-[#ede6dc]"
-                    : "bg-[#cb6440] hover:bg-[#b85633] text-white"
-                }`}
-              >
-                {selectedClinicToInspect.isVerified ? "Revoke Verification" : "Verify Facility"}
-              </button>
-              <button
-                onClick={() => setSelectedClinicToInspect(null)}
-                className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-4 py-2 text-xs font-medium cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </DashboardShell>
   )
 }

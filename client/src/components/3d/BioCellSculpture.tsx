@@ -473,50 +473,66 @@ export default function BioCellSculpture() {
     let targetRotY = -0.16;
     let velX = 0;
     let velY = 0;
+    let hoverTiltX = 0;
+    let hoverTiltY = 0;
+    let targetHoverTiltX = 0;
+    let targetHoverTiltY = 0;
     let isVisible = true;
+    let isInViewport = true;
     let isDisposed = false;
+
+    const v1Scratch = new THREE.Vector3();
+    const v2Scratch = new THREE.Vector3();
 
     // Helper to calculate exact 3D position along the tilted ring
     const updateSpheresOnRing = (angleOffset: number) => {
       // Lower-left sphere (at ~150 deg on the ring, clearly in front of the cell at z > 0)
       const theta1 = (150 * Math.PI) / 180 + angleOffset;
-      const v1 = new THREE.Vector3(
-        Math.cos(theta1) * ringRadius,
-        Math.sin(theta1) * ringRadius,
-        0
-      ).applyEuler(ringMesh.rotation);
-      sphere1.position.copy(v1);
+      v1Scratch
+        .set(Math.cos(theta1) * ringRadius, Math.sin(theta1) * ringRadius, 0)
+        .applyEuler(ringMesh.rotation);
+      sphere1.position.copy(v1Scratch);
 
       // Upper-right sphere (at ~15 deg on the ring, looping around the top right)
       const theta2 = (15 * Math.PI) / 180 + angleOffset;
-      const v2 = new THREE.Vector3(
-        Math.cos(theta2) * ringRadius,
-        Math.sin(theta2) * ringRadius,
-        0
-      ).applyEuler(ringMesh.rotation);
-      sphere2.position.copy(v2);
+      v2Scratch
+        .set(Math.cos(theta2) * ringRadius, Math.sin(theta2) * ringRadius, 0)
+        .applyEuler(ringMesh.rotation);
+      sphere2.position.copy(v2Scratch);
     };
 
     updateSpheresOnRing(0);
 
     const renderScene = (time: number) => {
-      // Subtle organic breathing animation
-      const breath = 1 + Math.sin(time * 0.8) * 0.010;
+      // Subtle organic breathing & vertical floating motion
+      const breath = motionReduced ? 1 : 1 + Math.sin(time * 0.8) * 0.010;
+      const floatY = motionReduced ? 0 : Math.sin(time * 0.72) * 0.085;
       sculptureGroup.scale.set(breath, breath, breath);
+      sculptureGroup.position.y = floatY;
+
+      // Grounded shadow subtly softens as sculpture floats upward
+      const shadowScale = 1 - floatY * 0.18;
+      shadowMesh.scale.set(shadowScale, shadowScale, 1);
 
       // Gentle orbital progression
       updateSpheresOnRing(time * 0.03);
       ringGroup.rotation.z = time * 0.015;
 
-      sculptureGroup.rotation.x = rotX;
-      sculptureGroup.rotation.y = rotY;
+      sculptureGroup.rotation.x = rotX + hoverTiltX;
+      sculptureGroup.rotation.y = rotY + hoverTiltY;
 
       renderer.render(scene, camera);
     };
 
+    const scheduleNextFrame = () => {
+      if (isDisposed || !isVisible || !isInViewport || motionReduced || frame !== 0) return;
+      previous = performance.now();
+      frame = requestAnimationFrame(tick);
+    };
+
     const tick = (now: number) => {
       frame = 0;
-      if (isDisposed || !isVisible || motionReduced) return;
+      if (isDisposed || !isVisible || !isInViewport || motionReduced) return;
       const dt = Math.min((now - (previous || now)) / 1000, 0.04);
       previous = now;
       elapsed += dt;
@@ -532,9 +548,12 @@ export default function BioCellSculpture() {
         velY *= Math.exp(-dt * 3.0);
       }
 
-      // Smooth lerp toward target rotation
-      rotX += (targetRotX - rotX) * Math.min(1, dt * 6.0);
-      rotY += (targetRotY - rotY) * Math.min(1, dt * 6.0);
+      // Smooth lerp toward target rotation & passive hover parallax
+      const lerpFactor = Math.min(1, dt * 6.0);
+      rotX += (targetRotX - rotX) * lerpFactor;
+      rotY += (targetRotY - rotY) * lerpFactor;
+      hoverTiltX += (targetHoverTiltX - hoverTiltX) * Math.min(1, dt * 4.5);
+      hoverTiltY += (targetHoverTiltY - hoverTiltY) * Math.min(1, dt * 4.5);
 
       renderScene(elapsed);
       frame = requestAnimationFrame(tick);
@@ -557,27 +576,42 @@ export default function BioCellSculpture() {
       lastY = e.clientY;
       velX = 0;
       velY = 0;
+      targetHoverTiltX = 0;
+      targetHoverTiltY = 0;
       host.setPointerCapture(e.pointerId);
       host.style.cursor = 'grabbing';
     };
 
     const onPointerMove = (e: PointerEvent) => {
-      if (!isDragging) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
+      if (isDragging) {
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
 
-      targetRotY += dx * 0.007;
-      targetRotX += dy * 0.007;
+        targetRotY += dx * 0.007;
+        targetRotX += dy * 0.007;
 
-      // Keep targetRotX within comfortable viewing angles
-      targetRotX = Math.max(-0.6, Math.min(0.6, targetRotX));
+        // Keep targetRotX within comfortable viewing angles
+        targetRotX = Math.max(-0.6, Math.min(0.6, targetRotX));
 
-      velY = dx * 0.012;
-      velX = dy * 0.012;
+        velY = dx * 0.012;
+        velX = dy * 0.012;
 
-      renderScene(elapsed);
+        renderScene(elapsed);
+        return;
+      }
+
+      // Subtle passive hover parallax for desktop pointers (never competes with drag or reduced-motion)
+      if (e.pointerType === 'mouse' && !motionReduced) {
+        const rect = host.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const normX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+          const normY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+          targetHoverTiltY = normX * 0.14;
+          targetHoverTiltX = normY * 0.1;
+        }
+      }
     };
 
     const onPointerUp = () => {
@@ -586,34 +620,63 @@ export default function BioCellSculpture() {
       host.style.cursor = 'grab';
     };
 
+    const onPointerLeave = () => {
+      targetHoverTiltX = 0;
+      targetHoverTiltY = 0;
+    };
+
     const onVisibilityChange = () => {
       isVisible = !document.hidden;
-      if (isVisible && !motionReduced) {
-        previous = performance.now();
-        frame = requestAnimationFrame(tick);
-      } else {
+      if (isVisible && isInViewport && !motionReduced) {
+        scheduleNextFrame();
+      } else if (frame !== 0) {
         cancelAnimationFrame(frame);
+        frame = 0;
       }
     };
 
     const onMotionChange = (e: MediaQueryListEvent) => {
       motionReduced = e.matches;
       if (motionReduced) {
-        cancelAnimationFrame(frame);
+        if (frame !== 0) {
+          cancelAnimationFrame(frame);
+          frame = 0;
+        }
+        targetHoverTiltX = 0;
+        targetHoverTiltY = 0;
+        hoverTiltX = 0;
+        hoverTiltY = 0;
         renderScene(elapsed);
       } else {
-        previous = performance.now();
-        frame = requestAnimationFrame(tick);
+        scheduleNextFrame();
       }
     };
 
     const observer = new ResizeObserver(handleResize);
     observer.observe(host);
 
+    const intersectionObserver =
+      typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(
+            (entries) => {
+              isInViewport = entries[0]?.isIntersecting ?? true;
+              if (isInViewport && isVisible && !motionReduced) {
+                scheduleNextFrame();
+              } else if (!isInViewport && frame !== 0) {
+                cancelAnimationFrame(frame);
+                frame = 0;
+              }
+            },
+            { threshold: 0.05 }
+          )
+        : null;
+    intersectionObserver?.observe(host);
+
     host.addEventListener('pointerdown', onPointerDown);
     host.addEventListener('pointermove', onPointerMove);
     host.addEventListener('pointerup', onPointerUp);
     host.addEventListener('pointercancel', onPointerUp);
+    host.addEventListener('pointerleave', onPointerLeave);
     host.style.cursor = 'grab';
 
     reducedMotion.addEventListener('change', onMotionChange);
@@ -621,7 +684,7 @@ export default function BioCellSculpture() {
 
     handleResize();
     if (!motionReduced) {
-      frame = requestAnimationFrame(tick);
+      scheduleNextFrame();
     } else {
       renderScene(0);
     }
@@ -630,11 +693,13 @@ export default function BioCellSculpture() {
       isDisposed = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
+      intersectionObserver?.disconnect();
 
       host.removeEventListener('pointerdown', onPointerDown);
       host.removeEventListener('pointermove', onPointerMove);
       host.removeEventListener('pointerup', onPointerUp);
       host.removeEventListener('pointercancel', onPointerUp);
+      host.removeEventListener('pointerleave', onPointerLeave);
       reducedMotion.removeEventListener('change', onMotionChange);
       document.removeEventListener('visibilitychange', onVisibilityChange);
 
@@ -658,7 +723,7 @@ export default function BioCellSculpture() {
   }, []);
 
   return (
-    <div className="relative w-full h-full min-h-[440px] md:min-h-[500px] flex items-center justify-center isolation-isolate select-none">
+    <div className="relative w-full h-full min-h-[340px] sm:min-h-[420px] lg:min-h-[480px] flex items-center justify-center isolation-isolate select-none">
       <div
         ref={hostRef}
         className="absolute inset-0 z-0 touch-pan-y"

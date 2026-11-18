@@ -306,7 +306,7 @@ export class AppointmentService {
         scheduledEnd,
         status: "CONFIRMED" as any,
         visitType: data.visitType || "IN_CLINIC",
-        consultationFee: 150,
+        consultationFee: 499,
         paymentStatus: "PENDING",
         paymentMethod: data.paymentMethod || "PAY_AT_CLINIC",
         reasonForVisit: data.reasonForVisit,

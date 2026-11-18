@@ -1,14 +1,18 @@
 import { useState, useEffect } from "react"
+import { AnimatePresence, motion } from "framer-motion"
 import { 
   Building2, Users, Calendar, BarChart3, 
   Settings, Stethoscope, Clock, Plus,
   ShieldCheck, Copy, Check, Filter, Search,
-  Phone, MapPin, CheckCircle2, AlertCircle, RefreshCw
+  Phone, MapPin, CheckCircle2, AlertCircle, RefreshCw, X
 } from "lucide-react"
 import { toast } from "sonner"
 import { DashboardShell, type NavItem } from "@/components/layout/DashboardShell"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { useAuth } from "@/context/AuthContext"
 import { api, type Clinic, type Appointment } from "@/lib/api"
+import { formatINR } from "@/lib/currency"
+import { EDITORIAL_EASE } from "@/lib/motion"
 
 export function ClinicAdminDashboard() {
   const { user } = useAuth()
@@ -153,6 +157,18 @@ export function ClinicAdminDashboard() {
     loadClinicData()
   }, [])
 
+  useEffect(() => {
+    if (!selectedAppointment && !showInviteModal) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedAppointment(null)
+        setShowInviteModal(false)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [selectedAppointment, showInviteModal])
+
   // Handle Switch Selected Clinic
   const handleSelectClinic = async (clinic: Clinic) => {
     setSelectedClinic(clinic)
@@ -285,10 +301,35 @@ export function ClinicAdminDashboard() {
       onSelectTab={setActiveTab}
     >
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <RefreshCw className="w-6 h-6 animate-spin text-[#cb6440] mb-3" />
-          <p className="font-editorial-serif text-xl text-[#1e1815]">Synchronizing Clinic Administration</p>
-          <p className="text-xs text-[#6e6059] mt-1">Retrieving verified medical providers, appointment rosters, and facility operations...</p>
+        <div className="space-y-8" aria-label="Loading clinic dashboard">
+          <div className="space-y-2 pb-6 border-b border-[#ece6dd]">
+            <Skeleton className="h-9 w-72 max-w-full" />
+            <Skeleton className="h-3.5 w-96 max-w-full" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[0, 1, 2, 3].map((idx) => (
+              <div key={idx} className="p-6 rounded-2xl border border-[#ece6dd] bg-white space-y-3">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-9 w-20" />
+                <Skeleton className="h-3 w-36" />
+              </div>
+            ))}
+          </div>
+          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white space-y-4">
+            <Skeleton className="h-6 w-56" />
+            {[0, 1, 2].map((idx) => (
+              <div key={idx} className="flex items-center justify-between gap-4 py-2 border-t border-[#f2ede4]">
+                <div className="flex items-center gap-3 flex-1">
+                  <Skeleton rounded="full" className="w-8 h-8 shrink-0" />
+                  <div className="space-y-1.5 flex-1">
+                    <Skeleton className="h-3.5 w-40" />
+                    <Skeleton className="h-3 w-52" />
+                  </div>
+                </div>
+                <Skeleton rounded="full" className="h-6 w-20" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
         <>
@@ -473,44 +514,44 @@ export function ClinicAdminDashboard() {
 
           {/* Real Operational Metrics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Total Consultations</span>
               <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
                 {clinicAppointments.length}
               </p>
               <div className="flex items-center gap-1.5 text-xs text-[#4a6356] mt-3 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {clinicAppointments.filter(a => a.status === "COMPLETED").length} completed, {clinicAppointments.filter(a => a.status === "CONFIRMED" || a.status === "IN_PROGRESS").length} scheduled
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>{clinicAppointments.filter(a => a.status === "COMPLETED").length} completed, {clinicAppointments.filter(a => a.status === "CONFIRMED" || a.status === "IN_PROGRESS").length} scheduled</span>
               </div>
             </div>
 
-            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Credentialed Doctors</span>
               <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
                 {staffData.doctors.length}
               </p>
               <div className="flex items-center gap-1.5 text-xs text-[#6e6059] mt-3 font-medium">
-                <Stethoscope className="w-3.5 h-3.5 text-[#cb6440]" /> Active Clinical Roster
+                <Stethoscope className="w-3.5 h-3.5 text-[#cb6440] shrink-0" /> Active Clinical Roster
               </div>
             </div>
 
-            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Clinical Staff Members</span>
               <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
                 {staffData.memberships.length}
               </p>
               <div className="flex items-center gap-1.5 text-xs text-[#8c6b3e] mt-3 font-medium">
-                <Users className="w-3.5 h-3.5" /> {staffData.invitations.length} Pending Invitations
+                <Users className="w-3.5 h-3.5 shrink-0" /> {staffData.invitations.length} Pending Invitations
               </div>
             </div>
 
-            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <span className="text-xs text-[#8c7e77] font-medium uppercase tracking-wider block">Estimated Fee Volume</span>
               <p className="font-editorial-serif text-4xl font-normal text-[#1e1815] mt-2">
-                ${clinicAppointments.reduce((sum, a) => sum + (Number(a.consultationFee) || 50), 0).toLocaleString()}
+                {formatINR(clinicAppointments.reduce((sum, a) => sum + (Number(a.consultationFee) || 0), 0))}
               </p>
               <div className="flex items-center gap-1.5 text-xs text-[#4a6356] mt-3 font-medium">
-                <BarChart3 className="w-3.5 h-3.5" /> Live Encounters Data
+                <BarChart3 className="w-3.5 h-3.5 shrink-0" /> Live Encounters Data
               </div>
             </div>
           </div>
@@ -768,85 +809,158 @@ export function ClinicAdminDashboard() {
             </div>
           </div>
 
-          {/* Master Table */}
-          <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
-                  <tr>
-                    <th className="p-3.5">Reference</th>
-                    <th className="p-3.5">Patient</th>
-                    <th className="p-3.5">Doctor</th>
-                    <th className="p-3.5">Date & Time</th>
-                    <th className="p-3.5">Fee</th>
-                    <th className="p-3.5">Status</th>
-                    <th className="p-3.5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#ece6dd]">
-                  {filteredAppointments.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="p-8 text-center text-[#8c7e77]">
-                        No appointments match the selected filters.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredAppointments.map(app => (
-                      <tr key={app.id} className="hover:bg-[#fbf9f5]/60 transition-colors">
-                        <td className="p-3.5 font-mono font-medium text-[#1e1815]">
-                          {app.bookingReference}
-                        </td>
-                        <td className="p-3.5">
-                          <p className="font-bold text-[#1e1815]">
-                            {app.patient?.profile.firstName} {app.patient?.profile.lastName}
-                          </p>
-                          <p className="text-[10px] text-[#8c7e77]">{app.patient?.profile.email}</p>
-                        </td>
-                        <td className="p-3.5">
-                          <p className="font-medium text-[#1e1815]">
-                            Dr. {app.doctor?.profile.firstName} {app.doctor?.profile.lastName}
-                          </p>
-                          <p className="text-[10px] text-[#8c7e77]">{app.doctor?.specialty}</p>
-                        </td>
-                        <td className="p-3.5">
-                          <p className="text-[#1e1815] font-medium">
-                            {new Date(app.scheduledStart).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                          <p className="text-[10px] text-[#8c7e77]">
-                            {new Date(app.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </td>
-                        <td className="p-3.5 font-medium text-[#1e1815]">
-                          ${Number(app.consultationFee) || 50}
-                        </td>
-                        <td className="p-3.5">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
-                            app.status === "COMPLETED"
-                              ? "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
-                              : app.status === "IN_PROGRESS"
-                              ? "bg-[#cb6440]/10 text-[#cb6440] border border-[#cb6440]/30"
-                              : app.status === "CONFIRMED"
-                              ? "bg-[#8c6b3e]/10 text-[#8c6b3e] border border-[#8c6b3e]/30"
-                              : "bg-[#e4ded5] text-[#6e6059]"
-                          }`}>
-                            {app.status.replace("_", " ")}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-right">
-                          <button
-                            onClick={() => setSelectedAppointment(app)}
-                            className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors"
-                          >
-                            Inspect
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          {/* Master Appointments: Mobile Cards + Desktop Table */}
+          {loadingAppointments ? (
+            <div className="p-6 rounded-2xl border border-[#ece6dd] bg-white space-y-3" aria-label="Loading appointments">
+              {[0, 1, 2, 3].map((idx) => (
+                <div key={idx} className="flex items-center justify-between gap-4 py-2 border-b border-[#f2ede4] last:border-b-0">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-28 hidden sm:block" />
+                  <Skeleton rounded="full" className="h-6 w-20" />
+                </div>
+              ))}
             </div>
-          </div>
+          ) : filteredAppointments.length === 0 ? (
+            <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl space-y-3">
+              <Calendar className="w-8 h-8 text-[#c5a880] mx-auto" />
+              <div>
+                <p className="font-editorial-serif text-xl text-[#1e1815]">No appointments match these filters</p>
+                <p className="text-xs text-[#6e6059] mt-1">Adjust your doctor, status, or search filter to view encounters.</p>
+              </div>
+              {(appointmentDoctorFilter !== "ALL" || appointmentStatusFilter !== "ALL" || appointmentSearch) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAppointmentDoctorFilter("ALL")
+                    setAppointmentStatusFilter("ALL")
+                    setAppointmentSearch("")
+                  }}
+                  className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Mobile stacked encounter cards */}
+              <div className="space-y-3 md:hidden">
+                {filteredAppointments.map(app => (
+                  <div key={app.id} className="p-4 rounded-2xl border border-[#ece6dd] bg-white shadow-2xs space-y-3 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-semibold text-[#cb6440] text-[11px]">{app.bookingReference}</span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                        app.status === "COMPLETED"
+                          ? "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
+                          : app.status === "IN_PROGRESS"
+                          ? "bg-[#cb6440]/10 text-[#cb6440] border border-[#cb6440]/30"
+                          : app.status === "CONFIRMED"
+                          ? "bg-[#8c6b3e]/10 text-[#8c6b3e] border border-[#8c6b3e]/30"
+                          : "bg-[#e4ded5] text-[#6e6059]"
+                      }`}>
+                        {app.status.replace("_", " ")}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-bold text-[#1e1815]">
+                        {app.patient?.profile.firstName} {app.patient?.profile.lastName}
+                      </p>
+                      <p className="text-[11px] text-[#6e6059]">
+                        Dr. {app.doctor?.profile.firstName} {app.doctor?.profile.lastName} • {app.doctor?.specialty}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-[#f2ede4]">
+                      <div className="text-[11px] text-[#8c7e77]">
+                        {new Date(app.scheduledStart).toLocaleDateString([], { month: 'short', day: 'numeric' })} •{" "}
+                        <strong className="text-[#1e1815]">{formatINR(app.consultationFee)}</strong>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAppointment(app)}
+                        className="rounded-full border border-[#e4ded5] bg-[#fbf9f5] hover:border-[#cb6440] text-[#1e1815] px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+                      >
+                        Inspect
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Master Table */}
+              <div className="hidden md:block p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-[#fbf9f5] text-[#8c7e77] font-semibold border-b border-[#ece6dd]">
+                      <tr>
+                        <th className="p-3.5">Reference</th>
+                        <th className="p-3.5">Patient</th>
+                        <th className="p-3.5">Doctor</th>
+                        <th className="p-3.5">Date & Time</th>
+                        <th className="p-3.5">Fee</th>
+                        <th className="p-3.5">Status</th>
+                        <th className="p-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#ece6dd]">
+                      {filteredAppointments.map(app => (
+                        <tr key={app.id} className="hover:bg-[#fbf9f5]/60 transition-colors">
+                          <td className="p-3.5 font-mono font-medium text-[#1e1815]">
+                            {app.bookingReference}
+                          </td>
+                          <td className="p-3.5">
+                            <p className="font-bold text-[#1e1815]">
+                              {app.patient?.profile.firstName} {app.patient?.profile.lastName}
+                            </p>
+                            <p className="text-[10px] text-[#8c7e77]">{app.patient?.profile.email}</p>
+                          </td>
+                          <td className="p-3.5">
+                            <p className="font-medium text-[#1e1815]">
+                              Dr. {app.doctor?.profile.firstName} {app.doctor?.profile.lastName}
+                            </p>
+                            <p className="text-[10px] text-[#8c7e77]">{app.doctor?.specialty}</p>
+                          </td>
+                          <td className="p-3.5">
+                            <p className="text-[#1e1815] font-medium">
+                              {new Date(app.scheduledStart).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                            <p className="text-[10px] text-[#8c7e77]">
+                              {new Date(app.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </td>
+                          <td className="p-3.5 font-medium text-[#1e1815]">
+                            {formatINR(app.consultationFee)}
+                          </td>
+                          <td className="p-3.5">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                              app.status === "COMPLETED"
+                                ? "bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/30"
+                                : app.status === "IN_PROGRESS"
+                                ? "bg-[#cb6440]/10 text-[#cb6440] border border-[#cb6440]/30"
+                                : app.status === "CONFIRMED"
+                                ? "bg-[#8c6b3e]/10 text-[#8c6b3e] border border-[#8c6b3e]/30"
+                                : "bg-[#e4ded5] text-[#6e6059]"
+                            }`}>
+                              {app.status.replace("_", " ")}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAppointment(app)}
+                              className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-3 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+                            >
+                              Inspect
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -874,12 +988,14 @@ export function ClinicAdminDashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {staffData.doctors.length === 0 ? (
-              <div className="col-span-3 p-8 text-center text-xs text-[#8c7e77] bg-white rounded-2xl border border-[#ece6dd]">
-                No doctors currently affiliated with this clinic. Use the Invite Doctor button above.
+              <div className="col-span-full p-10 text-center text-xs text-[#8c7e77] bg-white rounded-3xl border-2 border-dashed border-[#e4ded5] space-y-2">
+                <Stethoscope className="w-8 h-8 text-[#c5a880] mx-auto" />
+                <p className="font-editorial-serif text-xl text-[#1e1815]">No doctors affiliated yet</p>
+                <p className="text-[#6e6059]">Use the Invite Doctor button above to onboard practitioners to this facility.</p>
               </div>
             ) : (
               staffData.doctors.map(doc => (
-                <div key={doc.id} className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs space-y-4">
+                <div key={doc.id} className="p-6 rounded-2xl border border-[#ece6dd] bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 hover:border-[#cb6440]/40 transition-all duration-200 space-y-4">
                   <div className="flex items-start gap-4">
                     <img
                       src={doc.profile.avatarUrl || "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=150"}
@@ -902,7 +1018,7 @@ export function ClinicAdminDashboard() {
                     </div>
                     <div>
                       <span className="text-[#8c7e77] block">Fee</span>
-                      <span className="font-medium text-[#1e1815]">${Number(doc.consultationFee) || 50}/session</span>
+                      <span className="font-medium text-[#1e1815]">{formatINR(doc.consultationFee)}/session</span>
                     </div>
                   </div>
 
@@ -1376,94 +1492,125 @@ export function ClinicAdminDashboard() {
       )}
 
       {/* ------------------------------------------------------------------- */}
-      {/* APPOINTMENT INSPECT MODAL */}
+      {/* RESPONSIVE APPOINTMENT DETAILS DRAWER */}
       {/* ------------------------------------------------------------------- */}
-      {selectedAppointment && (
-        <div className="fixed inset-0 z-50 bg-[#1e1815]/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-[#ece6dd] shadow-xl max-w-lg w-full p-6 space-y-5 text-xs font-editorial-sans">
-            <div className="flex items-center justify-between pb-3 border-b border-[#ece6dd]">
-              <div>
-                <h3 className="font-editorial-serif text-2xl text-[#1e1815]">Encounter Record</h3>
-                <p className="text-[11px] font-mono text-[#8c7e77]">{selectedAppointment.bookingReference}</p>
-              </div>
-              <button
-                onClick={() => setSelectedAppointment(null)}
-                className="text-[#8c7e77] hover:text-[#1e1815] p-1 rounded-full cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
+      <AnimatePresence>
+        {selectedAppointment && (
+          <div
+            className="fixed inset-0 z-50 flex justify-end font-editorial-sans"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Encounter Record Details"
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setSelectedAppointment(null)}
+              className="fixed inset-0 bg-[#1e1815]/45 backdrop-blur-xs"
+            />
 
-            <div className="space-y-3">
-              <div className="p-3 rounded-xl bg-[#fbf9f5] border border-[#ece6dd] grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-[#8c7e77] block text-[10px]">Patient</span>
-                  <span className="font-bold text-[#1e1815]">
-                    {selectedAppointment.patient?.profile.firstName} {selectedAppointment.patient?.profile.lastName}
-                  </span>
-                  <span className="block text-[10px] text-[#6e6059]">{selectedAppointment.patient?.profile.email}</span>
-                </div>
-                <div>
-                  <span className="text-[#8c7e77] block text-[10px]">Attending Physician</span>
-                  <span className="font-bold text-[#1e1815]">
-                    Dr. {selectedAppointment.doctor?.profile.firstName} {selectedAppointment.doctor?.profile.lastName}
-                  </span>
-                  <span className="block text-[10px] text-[#cb6440]">{selectedAppointment.doctor?.specialty}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-xl bg-[#fbf9f5] border border-[#ece6dd]">
-                  <span className="text-[#8c7e77] block text-[10px]">Scheduled Time</span>
-                  <span className="font-medium text-[#1e1815]">
-                    {new Date(selectedAppointment.scheduledStart).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-[#fbf9f5] border border-[#ece6dd]">
-                  <span className="text-[#8c7e77] block text-[10px]">Visit Type & Fee</span>
-                  <span className="font-medium text-[#1e1815]">
-                    {selectedAppointment.visitType} • ${Number(selectedAppointment.consultationFee) || 50}
-                  </span>
-                </div>
-              </div>
-
-              {selectedAppointment.reasonForVisit && (
-                <div className="p-3 rounded-xl bg-[#fbf9f5] border border-[#ece6dd]">
-                  <span className="text-[#8c7e77] block text-[10px]">Reported Chief Complaint</span>
-                  <p className="text-[#1e1815] mt-1">{selectedAppointment.reasonForVisit}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="pt-2 flex justify-between items-center border-t border-[#ece6dd]">
-              <div className="flex gap-1.5">
-                {selectedAppointment.status !== "COMPLETED" && (
+            <motion.aside
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ duration: 0.28, ease: EDITORIAL_EASE }}
+              className="relative z-10 w-full max-w-md h-full bg-[#fbf9f5] border-l border-[#ece6dd] shadow-2xl flex flex-col justify-between overflow-y-auto text-xs"
+            >
+              <div className="p-6 space-y-5">
+                <div className="flex items-start justify-between gap-3 pb-4 border-b border-[#ece6dd]">
+                  <div>
+                    <h3 className="font-editorial-serif text-2xl text-[#1e1815]">Encounter Record</h3>
+                    <p className="text-[11px] font-mono text-[#cb6440] font-semibold mt-0.5">
+                      {selectedAppointment.bookingReference}
+                    </p>
+                  </div>
                   <button
-                    onClick={() => handleUpdateClinicAppointmentStatus(selectedAppointment.id, "COMPLETED")}
-                    className="rounded-full bg-[#4a6356] hover:bg-[#3d5247] text-white px-4 py-1.5 text-xs font-medium cursor-pointer transition-colors"
+                    type="button"
+                    onClick={() => setSelectedAppointment(null)}
+                    aria-label="Close encounter drawer"
+                    className="text-[#8c7e77] hover:text-[#1e1815] hover:bg-[#ede5d9] p-1.5 rounded-full cursor-pointer transition-colors"
                   >
-                    Mark Completed
+                    <X className="w-5 h-5" />
                   </button>
-                )}
-                {selectedAppointment.status !== "CANCELLED" && (
-                  <button
-                    onClick={() => handleUpdateClinicAppointmentStatus(selectedAppointment.id, "CANCELLED")}
-                    className="rounded-full border border-[#e4ded5] text-[#b85633] hover:bg-[#ede6dc] px-4 py-1.5 text-xs font-medium cursor-pointer transition-colors"
-                  >
-                    Cancel Booking
-                  </button>
-                )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="p-4 rounded-2xl bg-white border border-[#ece6dd] grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-[#8c7e77] block text-[10px] uppercase tracking-wider font-semibold">Patient</span>
+                      <span className="font-bold text-[#1e1815] block mt-0.5">
+                        {selectedAppointment.patient?.profile.firstName} {selectedAppointment.patient?.profile.lastName}
+                      </span>
+                      <span className="block text-[10px] text-[#6e6059] truncate">{selectedAppointment.patient?.profile.email}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#8c7e77] block text-[10px] uppercase tracking-wider font-semibold">Attending Physician</span>
+                      <span className="font-bold text-[#1e1815] block mt-0.5">
+                        Dr. {selectedAppointment.doctor?.profile.firstName} {selectedAppointment.doctor?.profile.lastName}
+                      </span>
+                      <span className="block text-[10px] text-[#cb6440] font-medium">{selectedAppointment.doctor?.specialty}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3.5 rounded-2xl bg-white border border-[#ece6dd]">
+                      <span className="text-[#8c7e77] block text-[10px] uppercase tracking-wider font-semibold">Scheduled Time</span>
+                      <span className="font-medium text-[#1e1815] block mt-0.5">
+                        {new Date(selectedAppointment.scheduledStart).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-white border border-[#ece6dd]">
+                      <span className="text-[#8c7e77] block text-[10px] uppercase tracking-wider font-semibold">Visit Type & Fee</span>
+                      <span className="font-medium text-[#1e1815] block mt-0.5">
+                        {selectedAppointment.visitType} • {formatINR(selectedAppointment.consultationFee)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedAppointment.reasonForVisit && (
+                    <div className="p-4 rounded-2xl bg-white border border-[#ece6dd]">
+                      <span className="text-[#8c7e77] block text-[10px] uppercase tracking-wider font-semibold">Reported Chief Complaint</span>
+                      <p className="text-[#1e1815] mt-1 leading-relaxed">{selectedAppointment.reasonForVisit}</p>
+                    </div>
+                  )}
+                </div>
               </div>
-              <button
-                onClick={() => setSelectedAppointment(null)}
-                className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-4 py-1.5 text-xs font-medium cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
+
+              <div className="p-5 bg-white border-t border-[#ece6dd] flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {selectedAppointment.status !== "COMPLETED" && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateClinicAppointmentStatus(selectedAppointment.id, "COMPLETED")}
+                      className="rounded-full bg-[#4a6356] hover:bg-[#3d5247] text-white px-4 py-2 text-xs font-medium cursor-pointer transition-colors"
+                    >
+                      Mark Completed
+                    </button>
+                  )}
+                  {selectedAppointment.status !== "CANCELLED" && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateClinicAppointmentStatus(selectedAppointment.id, "CANCELLED")}
+                      className="rounded-full border border-[#e4ded5] text-[#b85633] hover:bg-[#ede6dc] px-4 py-2 text-xs font-medium cursor-pointer transition-colors"
+                    >
+                      Cancel Booking
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAppointment(null)}
+                  className="rounded-full border border-[#e4ded5] bg-white hover:bg-[#ede6dc] text-[#1e1815] px-4 py-2 text-xs font-medium cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.aside>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </DashboardShell>
   )
 }

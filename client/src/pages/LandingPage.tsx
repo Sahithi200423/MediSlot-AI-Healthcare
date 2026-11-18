@@ -1,22 +1,140 @@
-import { useState, lazy, Suspense } from "react"
+import { useState, useEffect, useMemo, lazy, Suspense } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { 
-  Search, Sparkles,
-  ChevronDown, Bot, HeartPulse,
-  Stethoscope, Brain, Eye, Baby, Bone, Activity, FileText
+import {
+  Search,
+  Sparkles,
+  ChevronDown,
+  Bot,
+  HeartPulse,
+  Stethoscope,
+  Brain,
+  Eye,
+  Baby,
+  Bone,
+  Activity,
+  FileText,
+  ShieldCheck,
+  MapPin,
+  RotateCcw,
 } from "lucide-react"
 import { Navbar } from "@/components/layout/Navbar"
 import { Footer } from "@/components/layout/Footer"
-import { InteractiveBookingModal } from "@/components/booking/InteractiveBookingModal"
+import {
+  InteractiveBookingModal,
+  type BookingPreviewDoctor,
+} from "@/components/booking/InteractiveBookingModal"
+import { Skeleton } from "@/components/ui/Skeleton"
+import { api, type Doctor } from "@/lib/api"
+import { formatINR } from "@/lib/currency"
+import {
+  EDITORIAL_EASE,
+  VIEWPORT_ONCE,
+  cardRevealVariants,
+  fadeUpVariants,
+  staggerContainerVariants,
+} from "@/lib/motion"
 
 // Lazy-load the Three.js 3D Bio-Cellular Sculpture
 const BioCellSculpture = lazy(() => import("@/components/3d/BioCellSculpture"))
 
+interface DiscoveryDoctor extends BookingPreviewDoctor {
+  experience: string
+  nextAvailable: string
+  city?: string
+  isAccepting: boolean
+}
+
+function mapLiveDoctorToDiscovery(doc: Doctor): DiscoveryDoctor {
+  const first = doc.profile?.firstName?.trim() || "Specialist"
+  const last = doc.profile?.lastName?.trim() || ""
+  const initials = `${first[0] || "D"}${last[0] || "R"}`.toUpperCase()
+  return {
+    id: doc.id,
+    name: `Dr. ${first}${last ? ` ${last}` : ""}`,
+    specialty: doc.specialty || "General Medicine",
+    clinic: doc.clinic?.name || "MediSlot Partner Clinic",
+    city: doc.clinic ? `${doc.clinic.city}, ${doc.clinic.state}` : undefined,
+    experience:
+      doc.yearsOfExperience > 0
+        ? `${doc.yearsOfExperience} yrs clinical practice`
+        : doc.qualifications || "Board Certified Clinician",
+    nextAvailable: doc.isAcceptingPatients ? "Accepting Bookings" : "Waitlist Only",
+    fee: doc.consultationFee,
+    avatar: doc.profile?.avatarUrl || null,
+    initials,
+    isVerified: Boolean(doc.licenseVerified),
+    isAccepting: doc.isAcceptingPatients !== false,
+    isLive: true,
+  }
+}
+
 export function LandingPage() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedSpecialty, setSelectedSpecialty] = useState("ALL")
+  const [showAllDoctors, setShowAllDoctors] = useState(false)
+  const [liveDoctors, setLiveDoctors] = useState<DiscoveryDoctor[]>([])
+  const [loadingDoctors, setLoadingDoctors] = useState(true)
+  const [directoryError, setDirectoryError] = useState<string | null>(null)
+  const [reloadNonce, setReloadNonce] = useState(0)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadDirectory() {
+      setLoadingDoctors(true)
+      setDirectoryError(null)
+      try {
+        const doctors = await api.getDoctors()
+        if (!cancelled && Array.isArray(doctors)) {
+          const sorted = [...doctors].sort(
+            (a, b) =>
+              Number(Boolean(b.licenseVerified)) - Number(Boolean(a.licenseVerified)) ||
+              (b.yearsOfExperience || 0) - (a.yearsOfExperience || 0)
+          )
+          setLiveDoctors(sorted.map(mapLiveDoctorToDiscovery))
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setDirectoryError(
+            err?.message || "Unable to reach the live physician directory right now."
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingDoctors(false)
+        }
+      }
+    }
+    loadDirectory()
+    return () => {
+      cancelled = true
+    }
+  }, [reloadNonce])
+
+  const directoryDoctors = liveDoctors
+
+  const specialtyChips = useMemo(() => {
+    const unique = Array.from(new Set(directoryDoctors.map((d) => d.specialty).filter(Boolean)))
+    return ["ALL", ...unique.slice(0, 6)]
+  }, [directoryDoctors])
+
+  const filteredDoctors = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return directoryDoctors.filter((d) => {
+      const matchesSpec = selectedSpecialty === "ALL" || d.specialty === selectedSpecialty
+      const matchesQuery =
+        !q ||
+        d.name.toLowerCase().includes(q) ||
+        d.specialty.toLowerCase().includes(q) ||
+        d.clinic.toLowerCase().includes(q) ||
+        (d.city ? d.city.toLowerCase().includes(q) : false)
+      return matchesSpec && matchesQuery
+    })
+  }, [directoryDoctors, searchQuery, selectedSpecialty])
+
+  const visibleDoctors = showAllDoctors ? filteredDoctors : filteredDoctors.slice(0, 4)
 
   const specialties = [
     { name: "General Medicine", icon: Stethoscope, count: "128 Practitioners", desc: "Primary care, preventative wellness, and acute health management" },
@@ -27,45 +145,6 @@ export function LandingPage() {
     { name: "Orthopedics", icon: Bone, count: "41 Specialists", desc: "Joint reconstruction, sports medicine, and bone density analysis" },
     { name: "Ophthalmology", icon: Eye, count: "29 Eye Surgeons", desc: "Corneal health, retinal assessments, and optical diagnostics" },
     { name: "Psychiatry", icon: Activity, count: "36 Clinicians", desc: "Behavioral health, neuro-psychological assessments, and therapy" },
-  ]
-
-  const featuredDoctors = [
-    {
-      id: "doc-1",
-      name: "Dr. Sarah Jenkins, MD",
-      specialty: "Cardiology & Internal Medicine",
-      clinic: "Metropolitan Heart & Vascular Pavilion",
-      rating: 4.95,
-      reviews: 142,
-      experience: "14 yrs clinical practice",
-      nextAvailable: "Today, 4:30 PM",
-      fee: "$85",
-      avatar: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=350",
-    },
-    {
-      id: "doc-2",
-      name: "Dr. Marcus Vance, DO",
-      specialty: "Neurology & Spine Care",
-      clinic: "Apex Brain & Spine Medical Center",
-      rating: 4.98,
-      reviews: 98,
-      experience: "11 yrs clinical practice",
-      nextAvailable: "Tomorrow, 10:00 AM",
-      fee: "$110",
-      avatar: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=350",
-    },
-    {
-      id: "doc-3",
-      name: "Dr. Priya Patel, MBBS",
-      specialty: "Clinical Dermatology",
-      clinic: "Lumina Academic Health Center",
-      rating: 4.89,
-      reviews: 215,
-      experience: "9 yrs clinical practice",
-      nextAvailable: "Tomorrow, 2:15 PM",
-      fee: "$75",
-      avatar: "https://images.unsplash.com/photo-1594824813511-2090432c74d8?auto=format&fit=crop&q=80&w=350",
-    },
   ]
 
   const faqs = [
@@ -107,6 +186,7 @@ export function LandingPage() {
         isOpen={isBookingModalOpen}
         onClose={() => setIsBookingModalOpen(false)}
         initialDoctorId={selectedDoctorId}
+        doctors={directoryDoctors}
       />
 
       {/* ========================================================= */}
@@ -118,29 +198,45 @@ export function LandingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center min-h-[460px]">
           
           {/* Left Hero Column: Headline, Bio, and Call to Action */}
-          <div className="lg:col-span-6 flex flex-col justify-center space-y-6 z-10">
-            <h1 className="font-editorial-serif text-5xl sm:text-6xl lg:text-[4.2rem] font-normal tracking-tight leading-[1.08] text-[#1e1815]">
+          <motion.div
+            variants={staggerContainerVariants}
+            initial="hidden"
+            animate="visible"
+            className="lg:col-span-6 flex flex-col justify-center space-y-6 z-10"
+          >
+            <motion.h1
+              variants={fadeUpVariants}
+              className="font-editorial-serif text-5xl sm:text-6xl lg:text-[4.2rem] font-normal tracking-tight leading-[1.08] text-[#1e1815]"
+            >
               ‘Where clinical excellence<br />
               meets human dignity.’
-            </h1>
+            </motion.h1>
 
-            <p className="text-base sm:text-lg leading-relaxed text-[#4a3e39] max-w-lg font-editorial-sans">
+            <motion.p
+              variants={fadeUpVariants}
+              className="text-base sm:text-lg leading-relaxed text-[#4a3e39] max-w-lg font-editorial-sans"
+            >
               MediSlot is an advanced healthcare coordination platform providing real-time doctor scheduling, encrypted clinical records, and physician-supervised AI assistance.
-            </p>
+            </motion.p>
 
-            <div>
+            <motion.div variants={fadeUpVariants}>
               <button
                 type="button"
                 onClick={() => handleOpenBooking()}
-                className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-8 py-3.5 text-sm sm:text-base font-medium shadow-md shadow-[#cb6440]/15 transition-all cursor-pointer active:scale-98"
+                className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-8 py-3.5 text-sm sm:text-base font-medium shadow-md shadow-[#cb6440]/15 hover:shadow-lg hover:shadow-[#cb6440]/25 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 cursor-pointer"
               >
                 Book Consultation
               </button>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
           {/* Right Hero Column: Interactive Three.js Healthcare Sculpture */}
-          <div className="lg:col-span-6 w-full h-[380px] sm:h-[440px] lg:h-[480px] relative flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.72, delay: 0.12, ease: EDITORIAL_EASE }}
+            className="lg:col-span-6 w-full h-[360px] sm:h-[440px] lg:h-[480px] relative flex items-center justify-center"
+          >
             <Suspense 
               fallback={
                 <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-[#8b7566]">
@@ -151,12 +247,19 @@ export function LandingPage() {
             >
               <BioCellSculpture />
             </Suspense>
-          </div>
+          </motion.div>
 
         </div>
 
         {/* LOWER HERO GRID: Stats (Left 2-Cols) + Doctor Search & Doctor Cards (Right) */}
-        <div id="doctors" className="mt-8 pt-8 border-t border-[#ece6dd] grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start scroll-mt-24">
+        <motion.div
+          id="doctors"
+          variants={fadeUpVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={VIEWPORT_ONCE}
+          className="mt-8 pt-8 border-t border-[#ece6dd] grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start scroll-mt-24"
+        >
           
           {/* Left: 2x2 Hospital Statistics Grid with Explicit Demo Label */}
           <div className="lg:col-span-4 grid grid-cols-2 gap-x-6 gap-y-7 pt-1">
@@ -201,88 +304,251 @@ export function LandingPage() {
             </div>
 
             <p className="col-span-2 text-[10px] text-[#8c7e77] leading-tight italic pt-1">
-              * Demonstration showcase figures · 11 verified physicians active in local database
+              {liveDoctors.length > 0
+                ? `* Showcase network metrics · ${liveDoctors.length} physicians loaded live from MediSlot directory`
+                : "* Showcase network metrics · Connected to live MediSlot physician directory"}
             </p>
           </div>
 
-          {/* Right: Wide Search Bar Pill + Horizontal Doctor Cards */}
+          {/* Right: Wide Search Bar Pill + Specialty Filter Chips + Doctor Cards */}
           <div className="lg:col-span-8 flex flex-col space-y-4">
-            
             {/* Wide Pill Search Bar */}
-            <form 
+            <form
               onSubmit={(e) => {
                 e.preventDefault()
-                const match = featuredDoctors.find(d => 
-                  d.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                  d.specialty.toLowerCase().includes(searchQuery.toLowerCase())
-                )
+                const match = filteredDoctors[0]
                 handleOpenBooking(match?.id)
               }}
-              className="w-full bg-white rounded-full border border-[#e4ded5] shadow-xs px-4 sm:px-5 py-2 flex items-center gap-3"
+              className="w-full bg-white rounded-full border border-[#e4ded5] focus-within:border-[#cb6440] focus-within:ring-2 focus-within:ring-[#cb6440]/15 shadow-xs px-4 sm:px-5 py-2 flex items-center gap-3 transition-all"
             >
               <Search className="w-5 h-5 text-[#8c7e77] shrink-0" />
               <input
                 type="text"
-                placeholder="Search to find specialists, departments, or conditions..."
+                placeholder="Search doctors by name, specialty, clinic, or city..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search doctors"
                 className="w-full bg-transparent text-sm text-[#1e1815] placeholder:text-[#8c7e77] focus:outline-none font-editorial-sans"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="text-xs text-[#8c7e77] hover:text-[#1e1815] px-2 py-1 rounded-full transition-colors cursor-pointer"
+                  aria-label="Clear search"
+                >
+                  Clear
+                </button>
+              )}
               <button
                 type="submit"
-                className="shrink-0 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 sm:px-6 py-2 text-sm font-medium transition-colors cursor-pointer"
+                className="shrink-0 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 sm:px-6 py-2 text-sm font-medium transition-all cursor-pointer active:scale-[0.98]"
               >
                 Find doctors
               </button>
             </form>
 
-            {/* Horizontal Doctor Profile Cards (Matching Screenshot) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {featuredDoctors
-                .filter(d => 
-                  searchQuery === "" || 
-                  d.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                  d.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  d.clinic.toLowerCase().includes(searchQuery.toLowerCase())
-                )
-                .slice(0, 2)
-                .map((doc) => (
+            {/* Specialty Filter Chips + Directory Status */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter doctors by specialty">
+                {specialtyChips.map((chip) => {
+                  const active = selectedSpecialty === chip
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSpecialty(chip)
+                        setShowAllDoctors(false)
+                      }}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer border ${
+                        active
+                          ? "bg-[#cb6440] text-white border-[#cb6440] shadow-xs"
+                          : "bg-white text-[#542f28] border-[#e4ded5] hover:border-[#cb6440]/60 hover:bg-[#fbf5f2]"
+                      }`}
+                    >
+                      {chip === "ALL" ? "All Specialties" : chip}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#6e6059]">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    directoryError
+                      ? "bg-rose-500"
+                      : liveDoctors.length > 0
+                      ? "bg-[#4a6356]"
+                      : "bg-[#c5a880]"
+                  }`}
+                />
+                {loadingDoctors
+                  ? "Loading live directory..."
+                  : directoryError
+                  ? "Directory temporarily unreachable"
+                  : `${filteredDoctors.length} Live Specialists`}
+              </span>
+            </div>
+
+            {/* Doctor Cards Grid: Loading Skeletons / Error Retry / Empty State / Live Doctor Cards */}
+            {loadingDoctors ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="Loading physicians">
+                {[0, 1, 2, 3].map((idx) => (
                   <div
-                    key={doc.id}
-                    onClick={() => handleOpenBooking(doc.id)}
-                    className="bg-white rounded-2xl border border-[#e8e2d8] p-4 flex items-center gap-4 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+                    key={idx}
+                    className="bg-white rounded-2xl border border-[#e8e2d8] p-4 flex items-center gap-4"
                   >
-                    <img
-                      src={doc.avatar}
-                      alt={doc.name}
-                      className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl object-cover border border-[#ebe4da] shrink-0 group-hover:scale-102 transition-transform"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold text-[#1e1815] truncate group-hover:text-[#cb6440] transition-colors">
-                          {doc.name}
-                        </h3>
-                        <span className="text-[#8c7e77] text-base leading-none px-1">⋮</span>
+                    <Skeleton rounded="xl" className="w-16 h-16 shrink-0" />
+                    <div className="flex-1 space-y-2.5">
+                      <Skeleton className="h-3.5 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                      <Skeleton className="h-3 w-2/3" />
+                      <div className="flex items-center justify-between pt-1">
+                        <Skeleton className="h-3 w-24" />
+                        <Skeleton className="h-4 w-12" />
                       </div>
-                      <p className="text-xs text-[#6e6059] truncate mt-0.5">
-                        {doc.specialty}
-                      </p>
-                      <div className="flex items-center gap-1.5 text-xs text-[#c5a880] font-semibold mt-1">
-                        <span>Patient ratings</span>
-                        <span className="flex text-amber-500 text-xs">★★★★★</span>
-                        <span className="text-[#6e6059] text-[11px] font-normal">({doc.rating} · Demo)</span>
-                      </div>
-                      <p className="text-xs text-[#6e6059] mt-1.5">
-                        Demo availability: <span className="text-[#4a6b5d] font-semibold">{doc.nextAvailable}</span>
-                      </p>
                     </div>
                   </div>
                 ))}
-            </div>
+              </div>
+            ) : directoryError ? (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-2xl border border-[#e8e2d8] p-8 text-center space-y-3"
+              >
+                <div className="w-11 h-11 rounded-full bg-[#fbf5f2] text-[#cb6440] flex items-center justify-center mx-auto">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-editorial-serif text-xl text-[#1e1815]">
+                    Live physician directory is waking up
+                  </h3>
+                  <p className="text-xs text-[#6e6059] mt-1 max-w-md mx-auto">
+                    {directoryError} Click retry to load verified doctors directly from MediSlot.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReloadNonce((n) => n + 1)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Retry Live Directory
+                </button>
+              </motion.div>
+            ) : filteredDoctors.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-2xl border border-dashed border-[#dcd3c6] p-8 text-center space-y-3"
+              >
+                <div className="w-11 h-11 rounded-full bg-[#f5f1e9] text-[#cb6440] flex items-center justify-center mx-auto">
+                  <Search className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-editorial-serif text-xl text-[#1e1815]">
+                    No matching physicians found
+                  </h3>
+                  <p className="text-xs text-[#6e6059] mt-1 max-w-md mx-auto">
+                    We could not find specialists matching{" "}
+                    {searchQuery ? <strong className="text-[#1e1815]">"{searchQuery}"</strong> : "your current filter"}
+                    {selectedSpecialty !== "ALL" ? ` in ${selectedSpecialty}` : ""}. Try broadening your search or clearing filters.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("")
+                    setSelectedSpecialty("ALL")
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-2 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Reset Search & Filters
+                </button>
+              </motion.div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {visibleDoctors.map((doc) => (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => handleOpenBooking(doc.id)}
+                      className="text-left bg-white rounded-2xl border border-[#e8e2d8] p-4 flex items-center gap-4 shadow-xs hover:shadow-md hover:border-[#cb6440]/55 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group"
+                    >
+                      {doc.avatar ? (
+                        <img
+                          src={doc.avatar}
+                          alt={doc.name}
+                          className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl object-cover border border-[#ebe4da] shrink-0 group-hover:scale-[1.03] transition-transform duration-200"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl bg-gradient-to-br from-[#4a6356]/15 to-[#cb6440]/12 border border-[#e8e2d8] text-[#4a6356] flex items-center justify-center font-editorial-serif text-2xl shrink-0 group-hover:scale-[1.03] transition-transform duration-200">
+                          {doc.initials}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-sm font-bold text-[#1e1815] truncate group-hover:text-[#cb6440] transition-colors">
+                            {doc.name}
+                          </h3>
+                          {doc.isVerified && (
+                            <span
+                              title="Verified Clinician"
+                              className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#4a6356] bg-[#4a6356]/10 px-1.5 py-0.5 rounded-full shrink-0"
+                            >
+                              <ShieldCheck className="w-3 h-3" /> Verified
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#cb6440] font-medium truncate mt-0.5">
+                          {doc.specialty}
+                        </p>
+                        <p className="text-[11px] text-[#6e6059] truncate mt-0.5 flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-[#a28c7a] shrink-0" />
+                          <span className="truncate">
+                            {doc.clinic}
+                            {doc.city ? ` · ${doc.city}` : ""}
+                          </span>
+                        </p>
+                        <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-[#f2ede4]">
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#4a6b5d] truncate">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                doc.isAccepting ? "bg-[#4a6b5d]" : "bg-[#c5a880]"
+                              }`}
+                            />
+                            <span className="truncate">{doc.nextAvailable}</span>
+                          </span>
+                          <span className="shrink-0 text-xs font-bold text-[#1e1815] bg-[#f5f1e9] px-2.5 py-0.5 rounded-full">
+                            {formatINR(doc.fee)}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {filteredDoctors.length > 4 && (
+                  <div className="flex justify-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllDoctors((prev) => !prev)}
+                      className="rounded-full border border-[#dcd3c6] bg-white hover:bg-[#f5f1e9] hover:border-[#cb6440]/50 px-5 py-1.5 text-xs font-semibold text-[#2a201e] transition-colors cursor-pointer"
+                    >
+                      {showAllDoctors
+                        ? "Show fewer specialists"
+                        : `View all ${filteredDoctors.length} specialists`}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
 
           </div>
 
-        </div>
+        </motion.div>
 
       </section>
 
@@ -292,7 +558,13 @@ export function LandingPage() {
       <section id="specialties" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] max-w-7xl mx-auto w-full scroll-mt-20">
         <div className="space-y-12">
           
-          <div className="text-center max-w-2xl mx-auto space-y-3">
+          <motion.div
+            variants={fadeUpVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={VIEWPORT_ONCE}
+            className="text-center max-w-2xl mx-auto space-y-3"
+          >
             <span className="text-[10px] uppercase tracking-[1.4px] text-[#e17145] font-bold">
               DEPARTMENTAL SPECIALTIES
             </span>
@@ -302,19 +574,26 @@ export function LandingPage() {
             <p className="text-sm text-[#8b7566] dark:text-[#c4b5a8]">
               Verified medical care supported by advanced clinical diagnostics and coordinated specialty referrals.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <motion.div
+            variants={staggerContainerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={VIEWPORT_ONCE}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+          >
             {specialties.map((spec, i) => {
               const Icon = spec.icon
               return (
-                <div
+                <motion.div
                   key={i}
+                  variants={cardRevealVariants}
                   onClick={() => handleOpenBooking()}
-                  className="p-6 rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] hover:border-[#4a6b5d] transition-all cursor-pointer group flex flex-col justify-between"
+                  className="p-6 rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] hover:border-[#4a6b5d] hover:bg-white dark:hover:bg-[#1a1613] hover:-translate-y-1 hover:shadow-md transition-all duration-200 cursor-pointer group flex flex-col justify-between"
                 >
                   <div>
-                    <div className="w-12 h-12 rounded-full border border-[#4a6b5d]/30 bg-[#4a6b5d]/10 flex items-center justify-center text-[#4a6b5d] dark:text-[#99aa77] mb-4 group-hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-full border border-[#4a6b5d]/30 bg-[#4a6b5d]/10 flex items-center justify-center text-[#4a6b5d] dark:text-[#99aa77] mb-4 group-hover:scale-105 transition-transform duration-200">
                       <Icon className="w-5 h-5 text-[#e17145]" />
                     </div>
                     <h3 className="font-bold text-base text-[#2a201e] dark:text-[#fbf9f5] group-hover:text-[#4a6b5d] transition-colors">
@@ -324,13 +603,14 @@ export function LandingPage() {
                       {spec.desc}
                     </p>
                   </div>
-                  <span className="text-[11px] font-semibold text-[#4a6b5d] dark:text-[#99aa77] mt-4 block">
-                    {spec.count} →
+                  <span className="text-[11px] font-semibold text-[#4a6b5d] dark:text-[#99aa77] mt-4 inline-flex items-center gap-1">
+                    <span>{spec.count}</span>
+                    <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
                   </span>
-                </div>
+                </motion.div>
               )
             })}
-          </div>
+          </motion.div>
 
         </div>
       </section>
@@ -341,7 +621,13 @@ export function LandingPage() {
       <section id="about" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] bg-[#f5f1e9]/60 dark:bg-[#1a1714]/40 scroll-mt-20">
         <div className="max-w-7xl mx-auto space-y-12">
           
-          <div className="text-center max-w-2xl mx-auto space-y-3">
+          <motion.div
+            variants={fadeUpVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={VIEWPORT_ONCE}
+            className="text-center max-w-2xl mx-auto space-y-3"
+          >
             <span className="text-[10px] uppercase tracking-[1.4px] text-[#4a6b5d] dark:text-[#99aa77] font-bold">
               EFFORTLESS ACCESS
             </span>
@@ -351,10 +637,19 @@ export function LandingPage() {
             <p className="text-sm text-[#8b7566] dark:text-[#c4b5a8]">
               A refined three-step booking experience ensuring immediate confirmation with zero double-booking.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="p-8 rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] space-y-4">
+          <motion.div
+            variants={staggerContainerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={VIEWPORT_ONCE}
+            className="grid grid-cols-1 md:grid-cols-3 gap-8"
+          >
+            <motion.div
+              variants={cardRevealVariants}
+              className="p-8 rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] space-y-4 hover:border-[#c5a880] hover:shadow-md hover:-translate-y-1 transition-all duration-200"
+            >
               <span className="w-8 h-8 rounded-full bg-[#ede5d9] dark:bg-[#2b2520] text-[#2a201e] dark:text-[#fbf9f5] font-bold flex items-center justify-center text-xs">
                 01
               </span>
@@ -362,9 +657,12 @@ export function LandingPage() {
               <p className="text-xs text-[#8b7566] dark:text-[#c4b5a8] leading-relaxed">
                 Filter verified doctors by specialty, medical facility, consultation fee, and patient ratings.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="p-8 rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] space-y-4">
+            <motion.div
+              variants={cardRevealVariants}
+              className="p-8 rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] space-y-4 hover:border-[#c5a880] hover:shadow-md hover:-translate-y-1 transition-all duration-200"
+            >
               <span className="w-8 h-8 rounded-full bg-[#ede5d9] dark:bg-[#2b2520] text-[#2a201e] dark:text-[#fbf9f5] font-bold flex items-center justify-center text-xs">
                 02
               </span>
@@ -372,9 +670,12 @@ export function LandingPage() {
               <p className="text-xs text-[#8b7566] dark:text-[#c4b5a8] leading-relaxed">
                 Select your preferred 30-minute consultation slot. Our transactional engine prevents double-booking with row-level locks.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="p-8 rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] space-y-4">
+            <motion.div
+              variants={cardRevealVariants}
+              className="p-8 rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] space-y-4 hover:border-[#c5a880] hover:shadow-md hover:-translate-y-1 transition-all duration-200"
+            >
               <span className="w-8 h-8 rounded-full bg-[#ede5d9] dark:bg-[#2b2520] text-[#2a201e] dark:text-[#fbf9f5] font-bold flex items-center justify-center text-xs">
                 03
               </span>
@@ -382,8 +683,8 @@ export function LandingPage() {
               <p className="text-xs text-[#8b7566] dark:text-[#c4b5a8] leading-relaxed">
                 Receive instant notifications, upload diagnostic records for physician review, and download signed digital prescriptions.
               </p>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
         </div>
       </section>
@@ -391,10 +692,16 @@ export function LandingPage() {
       {/* ========================================================= */}
       {/* 5. CLINICAL AI COPILOT & PATIENT HEALTH VAULT */}
       {/* ========================================================= */}
-      <section id="ai-features" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] bg-[#141210] text-[#fbf9f5]">
+      <section id="ai-features" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] bg-[#141210] text-[#fbf9f5] scroll-mt-20">
         <div className="max-w-7xl mx-auto space-y-12">
           
-          <div className="text-center max-w-2xl mx-auto space-y-3">
+          <motion.div
+            variants={fadeUpVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={VIEWPORT_ONCE}
+            className="text-center max-w-2xl mx-auto space-y-3"
+          >
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#4a6b5d]/30 text-[#99aa77] text-xs font-semibold border border-[#4a6b5d]/40">
               <Bot className="w-3.5 h-3.5" />
               <span>Physician-Supervised Healthcare Intelligence</span>
@@ -405,12 +712,21 @@ export function LandingPage() {
             <p className="text-sm text-[#c4b5a8]">
               Automated document OCR, grounded laboratory extractions, and patient-friendly medical term explainers.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <motion.div
+            variants={staggerContainerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={VIEWPORT_ONCE}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-8"
+          >
             
             {/* AI Document Extraction Card */}
-            <div className="rounded-2xl border border-[#362f2a] bg-[#1d1916] p-7 space-y-4">
+            <motion.div
+              variants={cardRevealVariants}
+              className="rounded-2xl border border-[#362f2a] bg-[#1d1916] p-7 space-y-4 hover:border-[#4a6b5d]/70 transition-colors duration-200"
+            >
               <div className="flex items-center justify-between border-b border-[#362f2a] pb-4">
                 <div className="flex items-center gap-2.5">
                   <FileText className="w-5 h-5 text-[#e17145]" />
@@ -435,10 +751,13 @@ export function LandingPage() {
               <p className="text-xs text-[#8b7566]">
                 Clinicians receive a verified, grounded diagnostic brief citing exact source pages before starting consultations.
               </p>
-            </div>
+            </motion.div>
 
             {/* Patient AI Term Explainer Preview */}
-            <div className="rounded-2xl border border-[#362f2a] bg-[#1d1916] p-7 space-y-4">
+            <motion.div
+              variants={cardRevealVariants}
+              className="rounded-2xl border border-[#362f2a] bg-[#1d1916] p-7 space-y-4 hover:border-[#c5a880]/60 transition-colors duration-200"
+            >
               <div className="flex items-center justify-between border-b border-[#362f2a] pb-4">
                 <div className="flex items-center gap-2.5">
                   <Brain className="w-5 h-5 text-[#c5a880]" />
@@ -465,9 +784,9 @@ export function LandingPage() {
               <p className="text-xs text-[#8b7566]">
                 Educates patients on laboratory metrics without jargon, empowering meaningful conversations with their physicians.
               </p>
-            </div>
+            </motion.div>
 
-          </div>
+          </motion.div>
 
         </div>
       </section>
@@ -475,10 +794,16 @@ export function LandingPage() {
       {/* ========================================================= */}
       {/* 6. FREQUENTLY ASKED QUESTIONS */}
       {/* ========================================================= */}
-      <section id="faq" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] max-w-4xl mx-auto w-full">
+      <section id="faq" className="py-20 px-6 sm:px-12 lg:px-16 border-b border-[#dcd3c6] dark:border-[#362f2a] max-w-4xl mx-auto w-full scroll-mt-20">
         <div className="space-y-10">
           
-          <div className="text-center space-y-3">
+          <motion.div
+            variants={fadeUpVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={VIEWPORT_ONCE}
+            className="text-center space-y-3"
+          >
             <span className="text-[10px] uppercase tracking-[1.4px] text-[#4a6b5d] dark:text-[#99aa77] font-bold">
               HOSPITAL FAQs
             </span>
@@ -488,29 +813,41 @@ export function LandingPage() {
             <p className="text-sm text-[#8b7566] dark:text-[#c4b5a8]">
               Details on appointment scheduling, medical data isolation, and clinical safety.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="space-y-4">
+          <motion.div
+            variants={staggerContainerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={VIEWPORT_ONCE}
+            className="space-y-4"
+          >
             {faqs.map((faq, idx) => (
-              <div
+              <motion.div
                 key={idx}
-                className="rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] overflow-hidden"
+                variants={cardRevealVariants}
+                className="rounded-2xl border border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] overflow-hidden hover:border-[#c5a880] transition-colors"
               >
                 <button
                   type="button"
+                  aria-expanded={openFaq === idx}
                   onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                  className="w-full flex items-center justify-between p-5 text-left font-semibold text-sm sm:text-base text-[#2a201e] dark:text-[#fbf9f5] hover:text-[#e17145] transition-colors"
+                  className="w-full flex items-center justify-between gap-4 p-5 text-left font-semibold text-sm sm:text-base text-[#2a201e] dark:text-[#fbf9f5] hover:text-[#e17145] transition-colors cursor-pointer"
                 >
                   <span>{faq.q}</span>
-                  <ChevronDown className={`w-4 h-4 text-[#8b7566] transition-transform ${openFaq === idx ? "rotate-180 text-[#e17145]" : ""}`} />
+                  <ChevronDown
+                    className={`w-4 h-4 shrink-0 text-[#8b7566] transition-transform duration-200 ${
+                      openFaq === idx ? "rotate-180 text-[#e17145]" : ""
+                    }`}
+                  />
                 </button>
-                <AnimatePresence>
+                <AnimatePresence initial={false}>
                   {openFaq === idx && (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
+                      transition={{ duration: 0.24, ease: EDITORIAL_EASE }}
                       className="overflow-hidden"
                     >
                       <div className="px-5 pb-5 text-xs sm:text-sm text-[#8b7566] dark:text-[#c4b5a8] leading-relaxed border-t border-[#dcd3c6]/60 dark:border-[#362f2a] pt-3">
@@ -519,9 +856,9 @@ export function LandingPage() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
 
         </div>
       </section>

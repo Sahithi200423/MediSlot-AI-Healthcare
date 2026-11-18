@@ -1,8 +1,11 @@
+import { useEffect } from "react"
+import { AnimatePresence, motion } from "framer-motion"
 import { X, Calendar, Stethoscope, Building2, RefreshCw, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
-import { Card } from "@/components/ui/Card"
 import { type Appointment } from "@/lib/api"
+import { formatINR } from "@/lib/currency"
+import { modalBackdropVariants, modalDialogVariants } from "@/lib/motion"
 
 interface AppointmentDetailsModalProps {
   isOpen: boolean
@@ -19,146 +22,206 @@ export function AppointmentDetailsModal({
   onOpenReschedule,
   onOpenCancel,
 }: AppointmentDetailsModalProps) {
-  if (!isOpen || !appointment) return null
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    document.body.style.overflow = "hidden"
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.body.style.overflow = "unset"
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isOpen, onClose])
 
-  const isCancellable = appointment.status === "PENDING" || appointment.status === "CONFIRMED"
-  const start = new Date(appointment.scheduledStart)
-  const end = new Date(appointment.scheduledEnd)
+  const isCancellable =
+    appointment?.status === "PENDING" || appointment?.status === "CONFIRMED"
+  const start = appointment ? new Date(appointment.scheduledStart) : null
+  const end = appointment ? new Date(appointment.scheduledEnd) : null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <Card className="w-full max-w-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl overflow-hidden">
-        {/* Header */}
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-between">
-          <div>
-            <span className="text-[11px] font-mono text-teal-600 dark:text-teal-400 block font-semibold">
-              {appointment.bookingReference}
-            </span>
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">
-              Appointment Summary & Chart
-            </h2>
-          </div>
-          <button 
+    <AnimatePresence>
+      {isOpen && appointment && start && end && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto font-editorial-sans"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Appointment Summary"
+        >
+          <motion.div
+            variants={modalBackdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="fixed inset-0 bg-[#1e1815]/55 backdrop-blur-sm"
+          />
+
+          <motion.div
+            variants={modalDialogVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="relative z-10 w-full max-w-lg rounded-3xl bg-[#fbf9f5] border border-[#e8e2d8] shadow-2xl overflow-hidden text-[#1e1815] max-h-[92vh] overflow-y-auto"
           >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-5 text-xs">
-          {/* Status Badge & Visit Type */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Badge variant={
-                appointment.status === "CONFIRMED" ? "teal" :
-                appointment.status === "COMPLETED" ? "success" :
-                appointment.status === "IN_PROGRESS" ? "info" :
-                appointment.status === "CANCELLED" ? "danger" : "neutral"
-              }>
-                {appointment.status}
-              </Badge>
-              <Badge variant="neutral">
-                {appointment.visitType === "VIDEO_VISIT" ? "Telehealth Video" : "In-Clinic"}
-              </Badge>
-            </div>
-            <span className="text-slate-400">
-              Fee: ${Number(appointment.consultationFee).toFixed(2)}
-            </span>
-          </div>
-
-          {/* Scheduled Date & Time */}
-          <div className="p-3.5 rounded-xl bg-teal-50/40 dark:bg-teal-950/20 border border-teal-500/30 flex items-center gap-3">
-            <Calendar className="w-5 h-5 text-teal-600 shrink-0" />
-            <div>
-              <span className="font-bold text-slate-900 dark:text-white block">
-                {start.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
-              </span>
-              <span className="text-[11px] text-slate-500">
-                {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-          </div>
-
-          {/* Doctor Info */}
-          <div className="space-y-1">
-            <span className="text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">
-              Attending Physician
-            </span>
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            {/* Header */}
+            <div className="p-5 border-b border-[#ece6dd] bg-white/80 flex items-center justify-between gap-3">
               <div>
-                <p className="font-bold text-slate-900 dark:text-white">
-                  Dr. {appointment.doctor?.profile.firstName} {appointment.doctor?.profile.lastName}
-                </p>
-                <p className="text-[11px] text-slate-500">{appointment.doctor?.specialty}</p>
+                <span className="text-[11px] font-mono text-[#cb6440] block font-semibold">
+                  {appointment.bookingReference}
+                </span>
+                <h2 className="font-editorial-serif text-xl font-normal text-[#1e1815]">
+                  Appointment Summary & Chart
+                </h2>
               </div>
-              <Stethoscope className="w-5 h-5 text-teal-600" />
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close appointment details"
+                className="p-1.5 rounded-full text-[#8c7e77] hover:text-[#1e1815] hover:bg-[#ede5d9] transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-          </div>
 
-          {/* Clinic Location */}
-          <div className="space-y-1">
-            <span className="text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">
-              Healthcare Facility
-            </span>
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 flex items-start gap-3">
-              <Building2 className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-slate-900 dark:text-white">{appointment.clinic?.name}</p>
-                <p className="text-[11px] text-slate-500">{appointment.clinic?.address}, {appointment.clinic?.city}, {appointment.clinic?.state}</p>
-                <p className="text-[11px] text-teal-600 dark:text-teal-400 font-semibold mt-0.5">{appointment.clinic?.phone}</p>
+            <div className="p-6 space-y-5 text-xs">
+              {/* Status Badge & Fee */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={
+                      appointment.status === "CONFIRMED"
+                        ? "teal"
+                        : appointment.status === "COMPLETED"
+                        ? "success"
+                        : appointment.status === "IN_PROGRESS"
+                        ? "info"
+                        : appointment.status === "CANCELLED"
+                        ? "danger"
+                        : "neutral"
+                    }
+                  >
+                    {appointment.status}
+                  </Badge>
+                  <Badge variant="neutral">
+                    {appointment.visitType === "VIDEO_VISIT" ? "Telehealth Video" : "In-Clinic"}
+                  </Badge>
+                </div>
+                <span className="font-bold text-[#1e1815] bg-white border border-[#e8e2d8] px-3 py-1 rounded-full">
+                  Fee: {formatINR(appointment.consultationFee)}
+                </span>
               </div>
-            </div>
-          </div>
 
-          {/* Reason for Visit */}
-          {appointment.reasonForVisit && (
-            <div className="space-y-1">
-              <span className="text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">
-                Clinical Reason & Symptoms
-              </span>
-              <p className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300">
-                {appointment.reasonForVisit}
-              </p>
-            </div>
-          )}
+              {/* Scheduled Date & Time */}
+              <div className="p-3.5 rounded-2xl bg-[#4a6356]/8 border border-[#4a6356]/25 flex items-center gap-3">
+                <Calendar className="w-5 h-5 text-[#4a6356] shrink-0" />
+                <div>
+                  <span className="font-bold text-[#1e1815] block">
+                    {start.toLocaleDateString("en-IN", {
+                      weekday: "long",
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
+                  <span className="text-[11px] text-[#6e6059]">
+                    {start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} –{" "}
+                    {end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              </div>
 
-          {/* Cancellation reason if cancelled */}
-          {appointment.status === "CANCELLED" && appointment.cancellationReason && (
-            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-500/30 text-rose-800 dark:text-rose-200 text-xs">
-              <strong>Cancellation Reason:</strong> {appointment.cancellationReason}
-            </div>
-          )}
+              {/* Doctor Info */}
+              <div className="space-y-1.5">
+                <span className="text-[#8c7e77] font-semibold block text-[10px] uppercase tracking-wider">
+                  Attending Physician
+                </span>
+                <div className="p-3.5 rounded-2xl bg-white border border-[#e8e2d8] flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-[#1e1815]">
+                      Dr. {appointment.doctor?.profile.firstName} {appointment.doctor?.profile.lastName}
+                    </p>
+                    <p className="text-[11px] text-[#cb6440] font-medium">
+                      {appointment.doctor?.specialty}
+                    </p>
+                  </div>
+                  <Stethoscope className="w-5 h-5 text-[#4a6356]" />
+                </div>
+              </div>
 
-          {/* Actions */}
-          {isCancellable && (
-            <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 gap-1.5 text-xs"
-                onClick={() => {
-                  onClose()
-                  onOpenReschedule(appointment)
-                }}
-              >
-                <RefreshCw className="w-3.5 h-3.5" /> Reschedule
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                className="flex-1 gap-1.5 text-xs"
-                onClick={() => {
-                  onClose()
-                  onOpenCancel(appointment)
-                }}
-              >
-                <XCircle className="w-3.5 h-3.5" /> Cancel Appointment
-              </Button>
+              {/* Clinic Location */}
+              <div className="space-y-1.5">
+                <span className="text-[#8c7e77] font-semibold block text-[10px] uppercase tracking-wider">
+                  Healthcare Facility
+                </span>
+                <div className="p-3.5 rounded-2xl bg-white border border-[#e8e2d8] flex items-start gap-3">
+                  <Building2 className="w-5 h-5 text-[#cb6440] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-[#1e1815]">{appointment.clinic?.name}</p>
+                    <p className="text-[11px] text-[#6e6059]">
+                      {appointment.clinic?.address}, {appointment.clinic?.city},{" "}
+                      {appointment.clinic?.state}
+                    </p>
+                    {appointment.clinic?.phone && (
+                      <p className="text-[11px] text-[#4a6356] font-semibold mt-0.5">
+                        {appointment.clinic.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Reason for Visit */}
+              {appointment.reasonForVisit && (
+                <div className="space-y-1.5">
+                  <span className="text-[#8c7e77] font-semibold block text-[10px] uppercase tracking-wider">
+                    Clinical Reason & Symptoms
+                  </span>
+                  <p className="p-3.5 rounded-2xl bg-white border border-[#e8e2d8] text-[#4a3e39] leading-relaxed">
+                    {appointment.reasonForVisit}
+                  </p>
+                </div>
+              )}
+
+              {/* Cancellation reason if cancelled */}
+              {appointment.status === "CANCELLED" && appointment.cancellationReason && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs">
+                  <strong>Cancellation Reason:</strong> {appointment.cancellationReason}
+                </div>
+              )}
+
+              {/* Actions */}
+              {isCancellable && (
+                <div className="flex flex-col sm:flex-row gap-2.5 pt-3 border-t border-[#ece6dd]">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 gap-1.5 text-xs rounded-full"
+                    onClick={() => {
+                      onClose()
+                      onOpenReschedule(appointment)
+                    }}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Reschedule
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className="flex-1 gap-1.5 text-xs rounded-full"
+                    onClick={() => {
+                      onClose()
+                      onOpenCancel(appointment)
+                    }}
+                  >
+                    <XCircle className="w-3.5 h-3.5" /> Cancel Appointment
+                  </Button>
+                </div>
+              )}
             </div>
-          )}
+          </motion.div>
         </div>
-      </Card>
-    </div>
+      )}
+    </AnimatePresence>
   )
 }

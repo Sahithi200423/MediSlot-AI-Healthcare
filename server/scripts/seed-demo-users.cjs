@@ -163,7 +163,7 @@ async function seedDemoUsers() {
         qualifications: 'MD, FACC - Harvard Medical School',
         yearsOfExperience: 14,
         bio: 'Senior Attending Cardiologist specializing in preventive cardiology and metabolic health.',
-        consultationFee: 120,
+        consultationFee: 499,
         isAcceptingPatients: true
       }
     });

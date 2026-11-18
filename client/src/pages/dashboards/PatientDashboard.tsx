@@ -2,10 +2,11 @@ import { useState, useEffect } from "react"
 import { 
   Calendar, Clock, Search, FileText, 
   CheckCircle2, Upload, Plus, Building2, Stethoscope, 
-  ChevronRight, Loader2, RefreshCw, XCircle,
+  ChevronRight, RefreshCw, XCircle,
   Eye, Check, ShieldCheck, Trash2, Key, Pill, Sparkles
 } from "lucide-react"
 import { DashboardShell, type NavItem } from "@/components/layout/DashboardShell"
+import { Skeleton, SkeletonCard } from "@/components/ui/Skeleton"
 import { useAuth } from "@/context/AuthContext"
 import { 
   api, 
@@ -30,6 +31,7 @@ import { AiConsentBanner } from "@/components/ai/AiConsentBanner"
 import { LabReportAnalyzerModal } from "@/components/ai/LabReportAnalyzerModal"
 import { PatientAiExplainerModal } from "@/components/ai/PatientAiExplainerModal"
 import type { PatientAiConsentStatus } from "@/lib/api"
+import { formatINR } from "@/lib/currency"
 
 export function PatientDashboard() {
   const { user } = useAuth()
@@ -264,28 +266,30 @@ export function PatientDashboard() {
                 Upcoming Appointments
               </h1>
               <p className="text-xs text-[#6e6059] mt-1 font-editorial-sans">
-                Real-time booking confirmations from Supabase PostgreSQL.
+                Live booking confirmations and quick consultation actions.
               </p>
             </div>
             <button 
               type="button"
               onClick={() => handleOpenBooking()} 
-              className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2.5 text-xs font-medium shadow-xs transition-colors cursor-pointer flex items-center gap-2 self-start"
+              className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2.5 text-xs font-medium shadow-xs hover:shadow transition-all cursor-pointer flex items-center gap-2 self-start active:scale-[0.98]"
             >
               <Plus className="w-4 h-4" /> Book New Appointment
             </button>
           </div>
 
           {loadingAppointments ? (
-            <div className="p-16 text-center text-[#8c7e77] text-xs flex flex-col items-center gap-2">
-              <Loader2 className="w-6 h-6 animate-spin text-[#cb6440]" />
-              <span>Fetching confirmed consultations from database...</span>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5" aria-label="Loading upcoming appointments">
+              <SkeletonCard />
+              <SkeletonCard />
             </div>
           ) : upcomingAppointments.length === 0 ? (
-            <div className="p-12 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl">
-              <Calendar className="w-10 h-10 text-[#cb6440]/40 mx-auto mb-3" />
-              <h3 className="font-bold text-sm text-[#1e1815]">No Upcoming Consultations</h3>
-              <p className="text-xs text-[#6e6059] mt-1 max-w-sm mx-auto">
+            <div className="p-10 sm:p-12 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl">
+              <div className="w-12 h-12 rounded-2xl bg-[#fbf5f2] text-[#cb6440] flex items-center justify-center mx-auto mb-3">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <h3 className="font-editorial-serif text-xl text-[#1e1815]">No Upcoming Consultations</h3>
+              <p className="text-xs text-[#6e6059] mt-1 max-w-sm mx-auto leading-relaxed">
                 You have no scheduled appointments at this time. Browse our directory of specialist physicians to reserve your slot.
               </p>
               <button 
@@ -301,23 +305,23 @@ export function PatientDashboard() {
               {upcomingAppointments.map((apt) => {
                 const start = new Date(apt.scheduledStart)
                 return (
-                  <div key={apt.id} className="bg-white rounded-2xl border border-[#e8e2d8] border-l-4 border-l-[#4a6356] p-5 space-y-4 shadow-2xs hover:border-[#cb6440]/40 transition-all">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-[#4a6356]/10 text-[#4a6356] flex items-center justify-center font-bold text-base shrink-0">
-                          <Stethoscope className="w-6 h-6" />
+                  <div key={apt.id} className="bg-white rounded-2xl border border-[#e8e2d8] border-l-4 border-l-[#4a6356] p-5 space-y-4 shadow-2xs hover:shadow-md hover:border-[#cb6440]/45 hover:-translate-y-0.5 transition-all duration-200">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-[#4a6356]/10 text-[#4a6356] flex items-center justify-center font-bold text-base shrink-0">
+                          <Stethoscope className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
-                        <div>
-                          <span className="text-[10px] font-mono font-semibold text-[#cb6440]">
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-mono font-semibold text-[#cb6440] block">
                             {apt.bookingReference}
                           </span>
-                          <h3 className="font-bold text-sm text-[#1e1815]">
+                          <h3 className="font-bold text-sm text-[#1e1815] truncate">
                             Dr. {apt.doctor?.profile.firstName} {apt.doctor?.profile.lastName}
                           </h3>
-                          <p className="text-xs text-[#6e6059]">{apt.doctor?.specialty} • {apt.clinic?.name}</p>
+                          <p className="text-xs text-[#6e6059] truncate">{apt.doctor?.specialty} • {apt.clinic?.name}</p>
                         </div>
                       </div>
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                      <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
                         apt.status === "CONFIRMED" 
                           ? "bg-[#4a6356]/15 text-[#4a6356] border border-[#4a6356]/30" 
                           : "bg-[#cb6440]/15 text-[#cb6440] border border-[#cb6440]/30"
@@ -326,7 +330,7 @@ export function PatientDashboard() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#f8f5ee] border border-[#ece6dd] text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#f8f5ee] border border-[#ece6dd] text-xs">
                       <div>
                         <span className="text-[#8c7e77] block text-[11px]">Date & Time</span>
                         <span className="font-semibold text-[#1e1815] block mt-0.5">
@@ -342,15 +346,15 @@ export function PatientDashboard() {
                           {apt.visitType === "VIDEO_VISIT" ? "Telehealth Video" : "In-Clinic Visit"}
                         </span>
                         <span className="text-[11px] text-[#8c7e77]">
-                          Fee: ${Number(apt.consultationFee).toFixed(2)} ({apt.paymentMethod === "PAY_AT_CLINIC" ? "Pay at Clinic" : "Pending"})
+                          Fee: {formatINR(apt.consultationFee)} ({apt.paymentMethod === "PAY_AT_CLINIC" ? "Pay at Clinic" : "Pending"})
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs pt-1 border-t border-[#f2ede4]">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-2 border-t border-[#f2ede4]">
                       <button 
                         type="button"
-                        className="text-xs font-medium text-[#6e6059] hover:text-[#1e1815] flex items-center gap-1.5 cursor-pointer"
+                        className="text-xs font-medium text-[#6e6059] hover:text-[#1e1815] flex items-center gap-1.5 cursor-pointer py-1"
                         onClick={() => {
                           setSelectedAppointment(apt)
                           setIsDetailsOpen(true)
@@ -358,10 +362,10 @@ export function PatientDashboard() {
                       >
                         <Eye className="w-3.5 h-3.5" /> Details
                       </button>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <button 
                           type="button"
-                          className="rounded-full border border-[#dcd3c6] bg-white px-3 py-1 text-xs font-medium text-[#1e1815] hover:border-[#cb6440] transition-colors flex items-center gap-1 cursor-pointer"
+                          className="rounded-full border border-[#dcd3c6] bg-white px-3.5 py-1.5 text-xs font-medium text-[#1e1815] hover:border-[#cb6440] transition-colors flex items-center gap-1 cursor-pointer"
                           onClick={() => {
                             setSelectedAppointment(apt)
                             setIsRescheduleOpen(true)
@@ -371,7 +375,7 @@ export function PatientDashboard() {
                         </button>
                         <button 
                           type="button"
-                          className="rounded-full border border-rose-200 bg-rose-50/50 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 transition-colors flex items-center gap-1 cursor-pointer"
+                          className="rounded-full border border-rose-200 bg-rose-50/50 px-3.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 transition-colors flex items-center gap-1 cursor-pointer"
                           onClick={() => {
                             setSelectedAppointment(apt)
                             setIsCancelOpen(true)
@@ -465,15 +469,33 @@ export function PatientDashboard() {
 
           {/* Doctors Grid */}
           {loadingProviders ? (
-            <div className="p-12 text-center text-[#8c7e77] text-xs flex flex-col items-center gap-2">
-              <Loader2 className="w-6 h-6 animate-spin text-[#cb6440]" />
-              <span>Fetching verified healthcare providers...</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="Loading healthcare providers">
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
             </div>
           ) : doctors.length === 0 ? (
-            <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-2xl">
-              <Stethoscope className="w-8 h-8 text-[#8c7e77] mx-auto mb-2" />
-              <p className="font-semibold text-xs text-[#1e1815]">No doctors match this search</p>
-              <p className="text-[11px] text-[#6e6059] mt-1">Try resetting the specialty or search filter.</p>
+            <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl space-y-3">
+              <div className="w-11 h-11 rounded-2xl bg-[#fbf5f2] text-[#cb6440] flex items-center justify-center mx-auto">
+                <Stethoscope className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-editorial-serif text-xl text-[#1e1815]">No doctors match this search</p>
+                <p className="text-xs text-[#6e6059] mt-1">Try resetting the specialty or search filter.</p>
+              </div>
+              {(searchQuery || selectedSpecialty !== "all") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("")
+                    setSelectedSpecialty("all")
+                  }}
+                  className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -508,7 +530,7 @@ export function PatientDashboard() {
                   <div className="flex items-center justify-between text-xs pt-4 mt-3 border-t border-[#f2ede4]">
                     <div>
                       <span className="text-[#8c7e77] text-[10px] block font-medium">Consultation Fee</span>
-                      <span className="font-bold text-[#1e1815]">${Number(doc.consultationFee).toFixed(2)}</span>
+                      <span className="font-bold text-[#1e1815]">{formatINR(doc.consultationFee)}</span>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -544,7 +566,7 @@ export function PatientDashboard() {
                     {selectedDoctor.specialty} • Consultation Duration: 30 mins
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-[#6e6059] font-medium">Select Date:</span>
                   <input
                     type="date"
@@ -556,7 +578,7 @@ export function PatientDashboard() {
                   <button 
                     type="button"
                     onClick={() => handleOpenBooking(selectedDoctor)}
-                    className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-1.5 text-xs font-medium cursor-pointer transition-colors ml-2"
+                    className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-1.5 text-xs font-medium cursor-pointer transition-colors"
                   >
                     Book This Doctor
                   </button>
@@ -564,9 +586,13 @@ export function PatientDashboard() {
               </div>
 
               {loadingSlots ? (
-                <div className="p-8 text-center text-xs text-[#8c7e77] flex items-center justify-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-[#cb6440]" />
-                  <span>Calculating real slot availability against working hours and breaks...</span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2" aria-label="Loading availability slots">
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <div key={idx} className="p-2.5 rounded-xl border border-[#ece6dd] bg-[#fbf9f5] space-y-1.5">
+                      <Skeleton className="h-3.5 w-12 mx-auto" />
+                      <Skeleton className="h-2.5 w-8 mx-auto" />
+                    </div>
+                  ))}
                 </div>
               ) : availability?.status === "ON_LEAVE" ? (
                 <div className="p-6 text-center text-xs">
@@ -629,59 +655,97 @@ export function PatientDashboard() {
             <h1 className="font-editorial-serif text-3xl sm:text-4xl text-[#1e1815] font-normal tracking-tight">
               Appointment History
             </h1>
-            <p className="text-xs text-[#6e6059] mt-1">Past completed and cancelled medical consultations in Supabase.</p>
+            <p className="text-xs text-[#6e6059] mt-1">Completed and cancelled medical consultations on your record.</p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-[#e8e2d8] overflow-hidden shadow-2xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-[#f8f5ee] text-[#6e6059] font-semibold border-b border-[#ece6dd]">
-                  <tr>
-                    <th className="p-4">Reference</th>
-                    <th className="p-4">Physician</th>
-                    <th className="p-4">Date & Time</th>
-                    <th className="p-4">Facility</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">Fee</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#f2ede4]">
-                  {pastAppointments.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-[#8c7e77] italic">
-                        No previous appointment history found.
-                      </td>
-                    </tr>
-                  ) : (
-                    pastAppointments.map((apt) => (
-                      <tr key={apt.id} className="hover:bg-[#fbf9f5]">
-                        <td className="p-4 font-mono font-bold text-[#cb6440]">{apt.bookingReference}</td>
-                        <td className="p-4 font-bold text-[#1e1815]">
-                          Dr. {apt.doctor?.profile.firstName} {apt.doctor?.profile.lastName}
-                        </td>
-                        <td className="p-4 text-[#6e6059]">
-                          {new Date(apt.scheduledStart).toLocaleDateString()} at {new Date(apt.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className="p-4 text-[#4a3e39]">{apt.clinic?.name}</td>
-                        <td className="p-4">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
-                            apt.status === "COMPLETED" 
-                              ? "bg-[#4a6356]/15 text-[#4a6356]" 
-                              : "bg-[#ede5d9] text-[#6e6059]"
-                          }`}>
-                            {apt.status}
-                          </span>
-                        </td>
-                        <td className="p-4 font-semibold text-[#1e1815]">
-                          ${Number(apt.consultationFee).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          {loadingAppointments ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="Loading appointment history">
+              <SkeletonCard />
+              <SkeletonCard />
             </div>
-          </div>
+          ) : pastAppointments.length === 0 ? (
+            <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl space-y-2">
+              <Clock className="w-8 h-8 text-[#c5a880] mx-auto" />
+              <h3 className="font-editorial-serif text-xl text-[#1e1815]">No Appointment History Yet</h3>
+              <p className="text-xs text-[#6e6059]">Completed or cancelled consultations will appear here automatically.</p>
+            </div>
+          ) : (
+            <>
+              {/* Mobile stacked cards */}
+              <div className="space-y-3 sm:hidden">
+                {pastAppointments.map((apt) => (
+                  <div key={apt.id} className="bg-white rounded-2xl border border-[#e8e2d8] p-4 space-y-2.5 shadow-2xs text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-bold text-[#cb6440] text-[11px]">{apt.bookingReference}</span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                        apt.status === "COMPLETED"
+                          ? "bg-[#4a6356]/15 text-[#4a6356]"
+                          : "bg-[#ede5d9] text-[#6e6059]"
+                      }`}>
+                        {apt.status}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-bold text-[#1e1815]">
+                        Dr. {apt.doctor?.profile.firstName} {apt.doctor?.profile.lastName}
+                      </p>
+                      <p className="text-[11px] text-[#6e6059]">{apt.clinic?.name}</p>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-[#f2ede4]">
+                      <span className="text-[11px] text-[#8c7e77]">
+                        {new Date(apt.scheduledStart).toLocaleDateString()} • {new Date(apt.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span className="font-bold text-[#1e1815]">{formatINR(apt.consultationFee)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop / tablet table */}
+              <div className="hidden sm:block bg-white rounded-2xl border border-[#e8e2d8] overflow-hidden shadow-2xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-[#f8f5ee] text-[#6e6059] font-semibold border-b border-[#ece6dd]">
+                      <tr>
+                        <th className="p-4">Reference</th>
+                        <th className="p-4">Physician</th>
+                        <th className="p-4">Date & Time</th>
+                        <th className="p-4">Facility</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4">Fee</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#f2ede4]">
+                      {pastAppointments.map((apt) => (
+                        <tr key={apt.id} className="hover:bg-[#fbf9f5] transition-colors">
+                          <td className="p-4 font-mono font-bold text-[#cb6440]">{apt.bookingReference}</td>
+                          <td className="p-4 font-bold text-[#1e1815]">
+                            Dr. {apt.doctor?.profile.firstName} {apt.doctor?.profile.lastName}
+                          </td>
+                          <td className="p-4 text-[#6e6059]">
+                            {new Date(apt.scheduledStart).toLocaleDateString()} at {new Date(apt.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="p-4 text-[#4a3e39]">{apt.clinic?.name}</td>
+                          <td className="p-4">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                              apt.status === "COMPLETED"
+                                ? "bg-[#4a6356]/15 text-[#4a6356]"
+                                : "bg-[#ede5d9] text-[#6e6059]"
+                            }`}>
+                              {apt.status}
+                            </span>
+                          </td>
+                          <td className="p-4 font-semibold text-[#1e1815]">
+                            {formatINR(apt.consultationFee)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -766,7 +830,10 @@ export function PatientDashboard() {
             </div>
 
             {loadingRecords ? (
-              <div className="py-12 text-center text-xs text-[#8c7e77]">Loading your medical records vault...</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="Loading medical records">
+                <SkeletonCard />
+                <SkeletonCard />
+              </div>
             ) : medicalRecords.length === 0 ? (
               <div className="p-8 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-2xl">
                 <div className="max-w-md mx-auto space-y-3">

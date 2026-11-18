@@ -7,8 +7,10 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { DashboardShell, type NavItem } from "@/components/layout/DashboardShell"
+import { Skeleton, SkeletonCard } from "@/components/ui/Skeleton"
 import { useAuth } from "@/context/AuthContext"
 import { api, API_BASE, type Doctor, type Appointment } from "@/lib/api"
+import { formatINR } from "@/lib/currency"
 import { SoapNoteEditorModal } from "@/components/medical/SoapNoteEditorModal"
 import { PrescriptionBuilderModal } from "@/components/medical/PrescriptionBuilderModal"
 import { AiCopilotModal } from "@/components/ai/AiCopilotModal"
@@ -58,7 +60,7 @@ export function DoctorDashboard() {
     licenseNumber: "",
     qualifications: "MBBS, MD",
     yearsOfExperience: 5,
-    consultationFee: 75,
+    consultationFee: 199,
     bio: "",
   })
   const [isOnboarding, setIsOnboarding] = useState(false)
@@ -349,7 +351,7 @@ export function DoctorDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="text-[#8c7e77] block mb-1">Consultation Fee ($ USD)</label>
+                  <label className="text-[#8c7e77] block mb-1">Consultation Fee (₹ INR)</label>
                   <input
                     type="number"
                     min="0"
@@ -392,10 +394,10 @@ export function DoctorDashboard() {
                 Consultation Queue
               </h1>
               <p className="text-xs text-[#6e6059] mt-1 font-editorial-sans">
-                {appointments.length} total scheduled consultations • Live Clinical Supabase Ledger
+                {appointments.length} total scheduled consultations • Live Clinical Schedule
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {doctor && (
                 <span className={`px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider inline-flex items-center gap-1.5 ${
                   doctor.licenseVerified 
@@ -421,13 +423,34 @@ export function DoctorDashboard() {
             </div>
           </div>
 
+          {/* Quick Queue Metrics Strip */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 sm:p-5 rounded-2xl border border-[#ece6dd] bg-white shadow-2xs hover:shadow-sm transition-shadow">
+              <span className="text-[11px] uppercase tracking-wider text-[#8c7e77] font-semibold">Total Scheduled</span>
+              <p className="font-editorial-serif text-3xl text-[#1e1815] mt-1">{appointments.length}</p>
+            </div>
+            <div className="p-4 sm:p-5 rounded-2xl border border-[#ece6dd] bg-white shadow-2xs hover:shadow-sm transition-shadow">
+              <span className="text-[11px] uppercase tracking-wider text-[#8c7e77] font-semibold">Active & Confirmed</span>
+              <p className="font-editorial-serif text-3xl text-[#cb6440] mt-1">
+                {appointments.filter(a => a.status === "CONFIRMED" || a.status === "IN_PROGRESS").length}
+              </p>
+            </div>
+            <div className="p-4 sm:p-5 rounded-2xl border border-[#ece6dd] bg-white shadow-2xs hover:shadow-sm transition-shadow">
+              <span className="text-[11px] uppercase tracking-wider text-[#8c7e77] font-semibold">Completed</span>
+              <p className="font-editorial-serif text-3xl text-[#4a6356] mt-1">
+                {appointments.filter(a => a.status === "COMPLETED").length}
+              </p>
+            </div>
+          </div>
+
           {/* Filters */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
             {["ALL", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED"].map((st) => (
               <button
                 key={st}
+                type="button"
                 onClick={() => setAppointmentFilter(st)}
-                className={`px-3.5 py-1.5 rounded-full font-medium transition-all cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-all cursor-pointer ${
                   appointmentFilter === st
                     ? "bg-[#cb6440] text-white shadow-2xs font-semibold"
                     : "bg-white border border-[#e8e2d8] text-[#6e6059] hover:bg-[#f8f5ee]"
@@ -438,13 +461,36 @@ export function DoctorDashboard() {
             ))}
           </div>
 
-          {loadingAppointments ? (
-            <div className="p-12 text-center text-xs text-[#8c7e77]">Loading consultations from Supabase...</div>
+          {loading || loadingAppointments ? (
+            <div className="space-y-4" aria-label="Loading consultation queue">
+              <SkeletonCard />
+              <SkeletonCard />
+              <div className="p-5 rounded-2xl border border-[#ece6dd] bg-white flex items-center gap-4">
+                <Skeleton rounded="xl" className="w-20 h-14 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-1/3" />
+                  <Skeleton className="h-3 w-2/3" />
+                </div>
+              </div>
+            </div>
           ) : appointments.filter(a => appointmentFilter === "ALL" || a.status === appointmentFilter).length === 0 ? (
-            <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-2xl text-xs text-[#8c7e77] space-y-2">
-              <Calendar className="w-8 h-8 text-[#8c7e77] mx-auto opacity-50" />
-              <p className="font-semibold text-[#1e1815]">No consultations matching this filter.</p>
-              <p className="text-[#6e6059]">When patients book your slots, their consultations will appear here in real time.</p>
+            <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl text-xs text-[#8c7e77] space-y-3">
+              <div className="w-11 h-11 rounded-2xl bg-[#fbf5f2] text-[#cb6440] flex items-center justify-center mx-auto">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-editorial-serif text-xl text-[#1e1815]">No consultations matching this filter</p>
+                <p className="text-[#6e6059] mt-1">When patients book your slots, their consultations will appear here in real time.</p>
+              </div>
+              {appointmentFilter !== "ALL" && (
+                <button
+                  type="button"
+                  onClick={() => setAppointmentFilter("ALL")}
+                  className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Show All Consultations
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4">
@@ -465,13 +511,13 @@ export function DoctorDashboard() {
                     "border-l-4 border-l-[#8c7e77]";
 
                   return (
-                    <div key={apt.id} className={`bg-white rounded-2xl border border-[#e8e2d8] p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs hover:border-[#cb6440]/50 transition-all ${isBorderHighlight}`}>
-                      <div className="flex items-center gap-4">
-                        <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#f8f5ee] border border-[#ece6dd] shrink-0 min-w-[76px]">
-                          <span className="text-xs font-bold text-[#1e1815] block">{timeStr}</span>
+                    <div key={apt.id} className={`bg-white rounded-2xl border border-[#e8e2d8] p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-2xs hover:shadow-md hover:border-[#cb6440]/50 transition-all duration-200 ${isBorderHighlight}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 sm:gap-4 min-w-0">
+                        <div className="flex sm:flex-col items-center justify-between sm:justify-center px-3.5 py-2 sm:py-2.5 rounded-xl bg-[#f8f5ee] border border-[#ece6dd] shrink-0 sm:min-w-[84px]">
+                          <span className="text-xs font-bold text-[#1e1815]">{timeStr}</span>
                           <span className="text-[10px] text-[#8c7e77] font-medium">{dateStr}</span>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="font-bold text-sm text-[#1e1815]">{patientName}</h4>
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#f5f1e9] text-[#6e6059]">
@@ -492,14 +538,14 @@ export function DoctorDashboard() {
                           <p className="text-xs text-[#6e6059] mt-1 font-editorial-sans">
                             <span className="font-semibold text-[#1e1815]">Chief Complaint:</span> {apt.reasonForVisit || apt.reason || "Routine Consultation"}
                           </p>
-                          <div className="flex items-center gap-3 text-[11px] text-[#8c7e77] mt-1">
-                            <span>Fee: ${Number(apt.consultationFee || 0).toFixed(2)}</span>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#8c7e77] mt-1">
+                            <span>Fee: <strong className="text-[#1e1815]">{formatINR(apt.consultationFee || 0)}</strong></span>
                             <span>• Payment: <span className="font-medium text-[#1e1815]">{apt.paymentStatus}</span> ({apt.paymentMethod?.replace("_", " ")})</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap pt-2 lg:pt-0 border-t lg:border-t-0 border-[#f2ede4]">
                         <button
                           type="button" 
                           onClick={() => setActiveTab("ai-summaries")} 
@@ -856,7 +902,7 @@ export function DoctorDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="text-[#8c7e77] block mb-1">Consultation Fee ($ USD)</label>
+                  <label className="text-[#8c7e77] block mb-1">Consultation Fee (₹ INR)</label>
                   <input
                     type="number"
                     value={editProfile.consultationFee}

@@ -7,12 +7,18 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function Badge({ className, variant = "neutral", ...props }: BadgeProps) {
   const variants = {
-    neutral: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-    success: "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800",
-    warning: "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800",
-    danger: "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800",
-    info: "bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-950/50 dark:text-sky-400 dark:border-sky-800",
-    teal: "bg-teal-50 text-teal-700 border border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800",
+    neutral:
+      "bg-[#f5f1e9] text-[#4a3e39] border border-[#e4ded5] dark:bg-[#26211d] dark:text-[#e4ded5] dark:border-[#362f2a]",
+    success:
+      "bg-[#4a6356]/12 text-[#3a5245] border border-[#4a6356]/25 dark:bg-[#4a6356]/25 dark:text-[#99aa77] dark:border-[#4a6356]/40",
+    warning:
+      "bg-[#c5a880]/20 text-[#7d5f32] border border-[#c5a880]/40 dark:bg-[#c5a880]/15 dark:text-[#e5cfa9] dark:border-[#c5a880]/30",
+    danger:
+      "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800",
+    info:
+      "bg-[#cb6440]/10 text-[#b85633] border border-[#cb6440]/25 dark:bg-[#cb6440]/20 dark:text-[#f09a7a] dark:border-[#cb6440]/35",
+    teal:
+      "bg-[#4a6b5d]/12 text-[#4a6b5d] border border-[#4a6b5d]/25 dark:bg-[#4a6b5d]/25 dark:text-[#99aa77] dark:border-[#4a6b5d]/40",
   }
 
   return (

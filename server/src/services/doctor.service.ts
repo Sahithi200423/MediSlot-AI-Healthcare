@@ -34,7 +34,7 @@ export class DoctorService {
           qualifications: data.qualifications,
           yearsOfExperience: data.yearsOfExperience || 0,
           bio: data.bio,
-          consultationFee: data.consultationFee || 50.00,
+          consultationFee: data.consultationFee || 199,
           isAcceptingPatients: true,
         },
       })
@@ -132,7 +132,7 @@ export class DoctorService {
           qualifications: "MD, FACP",
           yearsOfExperience: 14,
           bio: "Attending physician specializing in preventative cardiovascular care.",
-          consultationFee: 150,
+          consultationFee: 499,
           isAcceptingPatients: true,
           clinicId: "00000000-0000-4000-a000-000000000001",
           profile: {
@@ -535,7 +535,7 @@ export class DoctorService {
         doctorId: doctorId || "00000000-0000-4000-a000-000000000002",
         doctorName: "Dr. Sarah Jenkins",
         specialty: "Cardiovascular Medicine",
-        consultationFee: 150,
+        consultationFee: 499,
         clinic: "MediSlot Central Metro Clinic",
         status: "AVAILABLE",
         totalSlots: defaultSlots.length,

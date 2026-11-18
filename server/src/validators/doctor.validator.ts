@@ -7,7 +7,7 @@ export const onboardDoctorSchema = z.object({
   licenseNumber: z.string().min(4, "Valid medical license number required"),
   yearsOfExperience: z.number().int().min(0).default(0),
   bio: z.string().max(1000).optional(),
-  consultationFee: z.number().positive("Consultation fee must be positive").default(50.00),
+  consultationFee: z.number().positive("Consultation fee must be positive").default(199),
   qualifications: z.string().optional(),
   clinicId: z.string().uuid("Valid clinic UUID required").optional().nullable(),
 })
