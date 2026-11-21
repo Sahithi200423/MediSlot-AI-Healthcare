@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { 
   Calendar, Clock, Search, FileText, 
   CheckCircle2, Upload, Plus, Building2, Stethoscope, 
@@ -76,6 +76,19 @@ export function PatientDashboard() {
   const [loadingProviders, setLoadingProviders] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSpecialty, setSelectedSpecialty] = useState("all")
+
+  // Client-side search filtering without name-based deduplication
+  const displayedDoctors = useMemo(() => {
+    if (!searchQuery.trim()) return doctors
+    const q = searchQuery.toLowerCase().trim()
+    return doctors.filter((doc) => {
+      const fullName = `${doc.profile?.firstName || ""} ${doc.profile?.lastName || ""}`.toLowerCase()
+      const spec = (doc.specialty || "").toLowerCase()
+      const clinicName = (doc.clinic?.name || "").toLowerCase()
+      const clinicCity = (doc.clinic?.city || "").toLowerCase()
+      return fullName.includes(q) || spec.includes(q) || clinicName.includes(q) || clinicCity.includes(q)
+    })
+  }, [doctors, searchQuery])
 
   // Real Notifications State
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
@@ -475,7 +488,7 @@ export function PatientDashboard() {
               <SkeletonCard />
               <SkeletonCard />
             </div>
-          ) : doctors.length === 0 ? (
+          ) : displayedDoctors.length === 0 ? (
             <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl space-y-3">
               <div className="w-11 h-11 rounded-2xl bg-[#fbf5f2] text-[#cb6440] flex items-center justify-center mx-auto">
                 <Stethoscope className="w-5 h-5" />
@@ -499,7 +512,7 @@ export function PatientDashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {doctors.map((doc) => (
+              {displayedDoctors.map((doc) => (
                 <div key={doc.id} className={`p-5 bg-white rounded-2xl border transition-all shadow-2xs ${selectedDoctor?.id === doc.id ? "border-[#cb6440] ring-1 ring-[#cb6440]" : "border-[#e8e2d8] hover:border-[#cb6440]/50"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">

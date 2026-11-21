@@ -8,6 +8,56 @@ import {
   AddDoctorLeaveInput 
 } from "../validators/doctor.validator.js"
 
+/**
+ * Exact audited IDs of confirmed synthetic test doctor records created
+ * by automated test suites.
+ * Excluded strictly from public browsing so public directory is clean,
+ * while preserving historical appointment foreign keys and clinical notes.
+ */
+export const CONFIRMED_SYNTHETIC_DOCTOR_IDS = new Set<string>([
+  "47418397-a297-4496-94e0-3b205a26ee55", // Record #2: doctor_1793088864766@medislot.com (Phase 4 concurrency test)
+  "b0f1bc53-6663-4929-8786-b24780679965", // Record #3: doctor_1793089617874@medislot.com (Phase 4 concurrency test)
+  "f089040d-1d26-45b2-8d2f-206b5ac6eb90", // Record #4: p4_doc_1793092243093@medislot.com (Phase 4 test)
+  "0e784ccf-31a6-4b49-9cd1-f9505e6fe408", // Record #5: sec.doca.277582@example.com (Phase 5 security test)
+  "1f92d936-4f58-4fa1-9821-441afccee59d", // Record #6: sec.docb.277582@example.com (Phase 5 security test)
+  "07960a6d-7590-4fc4-9652-9e1ccdb4d988", // Record #7: ai.doc.966383@example.com (Phase 6 AI test)
+  "7070e8f9-b3ea-4f22-9551-631e490e8912", // Record #8: ai.doc.993925@example.com (Phase 6 AI test)
+  "a1e86fb6-fd1b-4b4b-b5eb-f8fd9321a8db", // Record #9: ai.doc.380505@example.com (Phase 6 AI test)
+  "541efc0e-2e8f-497c-bb18-0c7d036fe95f", // Record #10: ai.doc.657529@example.com (Phase 6 AI test)
+  "b637c4b6-0930-4c53-8494-768aa813a7d4", // Record #12: editorial.doc.979263@example.com (Phase 1 redesign test)
+  "7998a466-dbfa-499e-92c4-660ce8f17cf1", // Record #13: editorial.doc.106443@example.com (Phase 1 redesign test)
+  "066c763b-e661-4d51-a900-7b28f6d06669", // Record #14: editorial.doc.977001@example.com (Phase 1 redesign test)
+  "a5a960f0-6cc0-4cd5-8b73-799a8d192c93", // Record #15: editorial.doc.855682@example.com (Phase 1 redesign test)
+  "d4743d25-f5f9-4800-9bb9-af3cdf45f6bc", // Record #16: editorial.doc.723500@example.com (Phase 1 redesign test)
+  "7c69548b-a725-4c15-bb98-bd5a4af88553", // Record #17: audit.doc.959353@example.com (Phase 7 audit test)
+])
+
+/**
+ * Reliable pattern matching to identify confirmed synthetic test accounts
+ * created by automated integration test suites without affecting legitimate doctors.
+ */
+export function isConfirmedSyntheticDoctorRecord(doc: {
+  id: string
+  profile?: { email?: string | null } | null
+}): boolean {
+  if (CONFIRMED_SYNTHETIC_DOCTOR_IDS.has(doc.id)) {
+    return true
+  }
+  const email = doc.profile?.email || ""
+  // Canonical demo accounts must never be flagged as synthetic
+  if (email === "dr.jenkins@demo.medislot.com") {
+    return false
+  }
+  // Exclude test email patterns: timestamped test accounts and test-suite prefixes
+  if (
+    /_\d{10,14}@/.test(email) ||
+    /^(ai\.doc\.|sec\.doc[ab]\.|editorial\.doc\.|audit\.doc\.)/i.test(email)
+  ) {
+    return true
+  }
+  return false
+}
+
 export class DoctorService {
   /**
    * Onboards a user as a DOCTOR.
@@ -76,7 +126,9 @@ export class DoctorService {
     search?: string
     acceptingPatients?: boolean
   }) {
-    const where: any = {}
+    const where: any = {
+      id: { notIn: Array.from(CONFIRMED_SYNTHETIC_DOCTOR_IDS) },
+    }
 
     if (filters.specialty) {
       where.specialty = { contains: filters.specialty, mode: "insensitive" }
@@ -106,7 +158,7 @@ export class DoctorService {
     }
 
     try {
-      return await prisma.doctor.findMany({
+      const doctors = await prisma.doctor.findMany({
         where,
         include: {
           profile: {
@@ -118,33 +170,34 @@ export class DoctorService {
         },
         orderBy: { yearsOfExperience: "desc" },
       })
+      return doctors.filter((doc) => !isConfirmedSyntheticDoctorRecord(doc))
     } catch (err) {
       if (isProdEnv()) {
         throw err
       }
       return [
         {
-          id: "00000000-0000-4000-a000-000000000002",
-          profileId: "00000000-0000-4000-a000-000000000005",
-          specialty: "Cardiovascular Medicine",
-          licenseNumber: "WA-MD-DEMO-01",
+          id: "93ccf966-e04d-4aa8-b823-e36e242056d8",
+          profileId: "47775115-3c12-47b0-b5ad-87f7a3a97950",
+          specialty: "Cardiology",
+          licenseNumber: "WA-MD-DEMO-0199",
           licenseVerified: true,
           qualifications: "MD, FACP",
           yearsOfExperience: 14,
           bio: "Attending physician specializing in preventative cardiovascular care.",
-          consultationFee: 499,
+          consultationFee: 120,
           isAcceptingPatients: true,
-          clinicId: "00000000-0000-4000-a000-000000000001",
+          clinicId: "ef3b05e6-7b53-41a7-aa9a-d6b255cc178c",
           profile: {
-            id: "00000000-0000-4000-a000-000000000005",
-            firstName: "Sarah",
-            lastName: "Jenkins",
+            id: "47775115-3c12-47b0-b5ad-87f7a3a97950",
+            firstName: "Marcus",
+            lastName: "Vance",
             email: "dr.jenkins@demo.medislot.com",
             phone: "+1-555-0199",
             avatarUrl: null,
           },
           clinic: {
-            id: "00000000-0000-4000-a000-000000000001",
+            id: "ef3b05e6-7b53-41a7-aa9a-d6b255cc178c",
             name: "MediSlot Central Metro Clinic",
             city: "Seattle",
             state: "WA",
