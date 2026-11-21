@@ -209,8 +209,8 @@ export const PatientAiExplainerModal: React.FC<PatientAiExplainerModalProps> = (
                 {termResult && (
                   <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
                     {termResult.is_emergency && (
-                      <div className="p-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-semibold uppercase">
-                        Emergency Alert: These symptoms require immediate medical intervention.
+                      <div className="p-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-semibold leading-relaxed">
+                        🚨 EMERGENCY ALERT: These symptoms require immediate medical intervention. Call 911 (US/Canada), 999 (UK), 112 (EU/India), or proceed immediately to the nearest hospital emergency department.
                       </div>
                     )}
                     <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">

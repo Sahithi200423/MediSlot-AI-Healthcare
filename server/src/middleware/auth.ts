@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express"
 import jwt from "jsonwebtoken"
-import { config } from "../config/env.js"
+import { config, isProdEnv } from "../config/env.js"
 import { getSupabaseAdmin } from "../config/supabase.js"
 import { prisma } from "../config/db.js"
 
@@ -48,91 +48,112 @@ export async function authenticate(
   const token = authHeader.split(" ")[1]
 
   try {
-    const supabase = getSupabaseAdmin()
+    const prodMode = isProdEnv()
 
-    // 1. Supabase Auth Token Verification (Production / Live Supabase Mode)
-    if (supabase) {
-      const { data: { user }, error } = await supabase.auth.getUser(token)
-
-      if (error || !user) {
-        res.status(401).json({
-          success: false,
-          error: {
-            message: "Invalid or expired Supabase session. Please log in again.",
-            statusCode: 401,
-          },
-        })
-        return
-      }
-
-      // Query user profile from Prisma
-      let profile = null
+    // 1. Local dev JWT verification ONLY outside production
+    if (!prodMode) {
       try {
-        profile = await prisma.profile.findUnique({
-          where: { id: user.id },
-          include: {
-            doctor: true,
-            clinicMemberships: true,
-          },
-        })
-      } catch (dbErr) {
-        // Fallback to metadata if DB read encounters transient error
+        const decoded = jwt.verify(token, config.jwtSecret) as any
+        if (decoded && decoded.id) {
+          req.user = {
+            id: decoded.id,
+            email: decoded.email || "",
+            role: decoded.role || "PATIENT",
+            firstName: decoded.firstName || "Demo",
+            lastName: decoded.lastName || "User",
+            clinicId: decoded.clinicId || null,
+            clinicIds: decoded.clinicId ? [decoded.clinicId] : (decoded.clinicIds || []),
+          }
+          return next()
+        }
+      } catch (_) {
+        // Not a local dev token or expired, try Supabase next
       }
-
-      const role = (profile?.role || user.user_metadata?.role || "PATIENT") as UserRole
-      const firstName = profile?.firstName || user.user_metadata?.first_name || "User"
-      const lastName = profile?.lastName || user.user_metadata?.last_name || ""
-      const membershipClinicIds: string[] = profile?.clinicMemberships?.map((m: any) => m.clinicId) || []
-      if (profile?.doctor?.clinicId && !membershipClinicIds.includes(profile.doctor.clinicId)) {
-        membershipClinicIds.push(profile.doctor.clinicId)
-      }
-      const clinicId = membershipClinicIds[0] || null
-
-      req.user = {
-        id: user.id,
-        email: user.email || "",
-        role,
-        firstName,
-        lastName,
-        clinicId,
-        clinicIds: membershipClinicIds,
-      }
-      return next()
     }
 
-    // 2. Strict Protection: If Supabase credentials are configured, NEVER allow mock JWT fallback
-    if (config.supabaseUrl && (config.supabaseAnonKey || config.supabaseServiceRoleKey)) {
-      res.status(401).json({
+    const supabase = getSupabaseAdmin()
+
+    if (prodMode && !supabase) {
+      res.status(503).json({
         success: false,
         error: {
-          message: "Real Supabase authentication is enforced. Mock sessions are rejected.",
-          statusCode: 401,
+          message: "Authentication service is not configured.",
+          statusCode: 503,
         },
       })
       return
     }
 
-    // 3. Offline Dev Fallback ONLY when Supabase credentials are completely omitted
-    const decoded = jwt.verify(token, config.jwtSecret) as any
+    // 2. Supabase Auth Token Verification (Production / Live Supabase Mode)
+    if (supabase) {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser(token)
 
-    if (!decoded || !decoded.id) {
-      res.status(401).json({
-        success: false,
-        error: { message: "Invalid or expired token", statusCode: 401 },
-      })
-      return
+        if (!error && user) {
+          let profile = null
+          try {
+            profile = await prisma.profile.findUnique({
+              where: { id: user.id },
+              include: {
+                doctor: true,
+                clinicMemberships: true,
+              },
+            })
+          } catch (dbErr) {
+            if (prodMode) {
+              res.status(503).json({
+                success: false,
+                error: {
+                  message: "Database unavailable while verifying user permissions.",
+                  statusCode: 503,
+                },
+              })
+              return
+            }
+            // Non-production dev tolerance when DB is offline
+          }
+
+          const role = (profile?.role || user.user_metadata?.role || "PATIENT") as UserRole
+          const firstName = profile?.firstName || user.user_metadata?.first_name || "User"
+          const lastName = profile?.lastName || user.user_metadata?.last_name || ""
+          const membershipClinicIds: string[] = profile?.clinicMemberships?.map((m: any) => m.clinicId) || []
+          if (profile?.doctor?.clinicId && !membershipClinicIds.includes(profile.doctor.clinicId)) {
+            membershipClinicIds.push(profile.doctor.clinicId)
+          }
+          const clinicId = membershipClinicIds[0] || null
+
+          req.user = {
+            id: user.id,
+            email: user.email || "",
+            role,
+            firstName,
+            lastName,
+            clinicId,
+            clinicIds: membershipClinicIds,
+          }
+          return next()
+        }
+      } catch (sbErr) {
+        if (prodMode) {
+          res.status(503).json({
+            success: false,
+            error: {
+              message: "Authentication service temporarily unreachable.",
+              statusCode: 503,
+            },
+          })
+          return
+        }
+      }
     }
 
-    req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      role: decoded.role || "PATIENT",
-      firstName: decoded.firstName || "Demo",
-      lastName: decoded.lastName || "User",
-      clinicId: decoded.clinicId || null,
-      clinicIds: decoded.clinicId ? [decoded.clinicId] : [],
-    }
-    next()
+    res.status(401).json({
+      success: false,
+      error: {
+        message: "Invalid or expired session. Please log in again.",
+        statusCode: 401,
+      },
+    })
   } catch (err: any) {
     res.status(401).json({
       success: false,
@@ -233,6 +254,12 @@ export async function requireDoctorAccess(
 
   if (!doctorId) {
     res.status(400).json({ success: false, error: { message: "Doctor ID is required", statusCode: 400 } })
+    return
+  }
+
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!uuidRegex.test(doctorId)) {
+    res.status(400).json({ success: false, error: { message: "Invalid Doctor ID format. Must be a valid UUID.", statusCode: 400 } })
     return
   }
 

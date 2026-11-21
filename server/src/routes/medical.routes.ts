@@ -44,6 +44,11 @@ router.get(
   authenticate,
   MedicalController.getMyRecords
 )
+router.get(
+  "/records",
+  authenticate,
+  MedicalController.getMyRecords
+)
 
 // Patient records for authorized doctors or admin
 router.get(
@@ -72,6 +77,11 @@ router.post(
   authenticate,
   MedicalController.grantDoctorAccess
 )
+router.post(
+  "/access/grant",
+  authenticate,
+  MedicalController.grantDoctorAccess
+)
 
 // Revoke doctor record access (patient only)
 router.post(
@@ -79,10 +89,20 @@ router.post(
   authenticate,
   MedicalController.revokeDoctorAccess
 )
+router.post(
+  "/access/revoke",
+  authenticate,
+  MedicalController.revokeDoctorAccess
+)
 
 // Get doctor access list for authenticated patient
 router.get(
   "/records/access/doctors",
+  authenticate,
+  MedicalController.getDoctorAccessList
+)
+router.get(
+  "/access/doctors",
   authenticate,
   MedicalController.getDoctorAccessList
 )

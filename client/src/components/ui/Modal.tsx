@@ -1,6 +1,8 @@
-import React, { useEffect } from "react"
+import React, { useEffect, useId } from "react"
+import { AnimatePresence, motion } from "framer-motion"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { modalBackdropVariants, modalDialogVariants } from "@/lib/motion"
 
 export interface ModalProps {
   isOpen: boolean
@@ -12,6 +14,8 @@ export interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, description, children, maxWidth = "md" }: ModalProps) {
+  const titleId = useId()
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose()
@@ -26,8 +30,6 @@ export function Modal({ isOpen, onClose, title, description, children, maxWidth 
     }
   }, [isOpen, onClose])
 
-  if (!isOpen) return null
-
   const maxWidths = {
     sm: "max-w-sm",
     md: "max-w-md",
@@ -36,34 +38,57 @@ export function Modal({ isOpen, onClose, title, description, children, maxWidth 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-in fade-in"
-        onClick={onClose}
-      />
-
-      {/* Modal Dialog Content */}
-      <div 
-        className={cn(
-          "relative w-full rounded-2xl bg-white p-6 shadow-2xl transition-all dark:bg-slate-900 border border-slate-200 dark:border-slate-800 animate-in zoom-in-95",
-          maxWidths[maxWidth]
-        )}
-      >
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h3>
-            {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
-          </div>
-          <button
+    <AnimatePresence>
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 font-editorial-sans"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+        >
+          {/* Backdrop */}
+          <motion.div
+            variants={modalBackdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="fixed inset-0 bg-[#1e1815]/55 backdrop-blur-sm"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+          />
+
+          {/* Modal Dialog Content */}
+          <motion.div
+            variants={modalDialogVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className={cn(
+              "relative z-10 w-full rounded-3xl bg-[#fbf9f5] p-6 shadow-2xl border border-[#e8e2d8] text-[#1e1815] dark:bg-[#1a1613] dark:border-[#362f2a] dark:text-[#fbf9f5] max-h-[90vh] overflow-y-auto",
+              maxWidths[maxWidth]
+            )}
           >
-            <X className="w-5 h-5" />
-          </button>
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-[#ece6dd] dark:border-[#362f2a]">
+              <div>
+                <h3 id={titleId} className="font-editorial-serif text-2xl font-normal text-[#1e1815] dark:text-[#fbf9f5]">
+                  {title}
+                </h3>
+                {description && (
+                  <p className="text-xs text-[#6e6059] dark:text-[#c4b5a8] mt-1">{description}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close dialog"
+                className="rounded-full p-1.5 text-[#8c7e77] hover:bg-[#ede5d9] hover:text-[#1e1815] dark:hover:bg-[#2b2520] dark:hover:text-[#fbf9f5] transition-colors cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mt-4">{children}</div>
+          </motion.div>
         </div>
-        <div className="mt-4">{children}</div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   )
 }

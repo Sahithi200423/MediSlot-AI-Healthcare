@@ -1,13 +1,30 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { Activity, Menu, X, ArrowRight, LayoutDashboard, LogOut } from "lucide-react"
+import { AnimatePresence, motion } from "framer-motion"
+import { Menu, X, ArrowRight, LayoutDashboard, LogOut, ChevronDown } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
-import { Button } from "@/components/ui/Button"
-import { ThemeToggle } from "@/components/ui/ThemeToggle"
+import { EDITORIAL_EASE } from "@/lib/motion"
 
-export function Navbar() {
+export function Navbar({ onOpenBooking }: { onOpenBooking?: () => void }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isScrolled, setIsScrolled] = useState(false)
   const { user, logout } = useAuth()
+
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 12)
+    handleScroll()
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [mobileMenuOpen])
 
   const userDashboardRoute = user
     ? {
@@ -19,88 +36,99 @@ export function Navbar() {
     : "/login"
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/80">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-teal-500 flex items-center justify-center text-white shadow-md shadow-sky-500/20 group-hover:scale-105 transition-transform">
-              <Activity className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                Medi<span className="text-teal-600 dark:text-teal-400">Slot</span>
-              </span>
-              <span className="hidden sm:inline-block ml-2 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
-                Healthcare SaaS
-              </span>
-            </div>
+    <header
+      className={`sticky top-0 z-40 w-full border-b font-editorial-sans transition-all duration-300 ${
+        isScrolled
+          ? "border-[#e4dcd0] bg-[#fbf9f5]/95 backdrop-blur-md shadow-[0_6px_24px_-14px_rgba(30,24,21,0.16)]"
+          : "border-[#eae4da] bg-[#fbf9f5]/88 backdrop-blur-sm"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-14">
+        <div className="flex items-center justify-between h-20">
+          {/* Left: medislot. logo in dark serif typography */}
+          <Link to="/" className="flex items-center gap-2 group">
+            <span className="font-editorial-serif text-3xl sm:text-4xl tracking-tight text-[#1e1815] font-normal transition-opacity group-hover:opacity-85">
+              medislot<span className="text-[#cb6440]">.</span>
+            </span>
           </Link>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-6">
-            <a href="#specialties" className="text-sm font-medium text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-teal-400 transition-colors">
-              Specialties
+          {/* Center: Navigation */}
+          <nav className="hidden md:flex items-center gap-8" aria-label="Primary navigation">
+            <a
+              href="#doctors"
+              className="nav-link-editorial text-[12px] uppercase tracking-[1.3px] font-medium text-[#2e2623] hover:text-[#cb6440] transition-colors"
+            >
+              OUR PHYSICIANS
             </a>
-            <a href="#how-it-works" className="text-sm font-medium text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-teal-400 transition-colors">
-              How It Works
+            <a
+              href="#specialties"
+              className="nav-link-editorial group text-[12px] uppercase tracking-[1.3px] font-medium text-[#2e2623] hover:text-[#cb6440] transition-colors flex items-center gap-1"
+            >
+              <span>SERVICES</span>
+              <ChevronDown className="w-3 h-3 text-[#8c7e77] transition-transform duration-200 group-hover:translate-y-0.5 group-hover:text-[#cb6440]" />
             </a>
-            <a href="#benefits" className="text-sm font-medium text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-teal-400 transition-colors">
-              Benefits
-            </a>
-            <a href="#ai-features" className="text-sm font-medium text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-teal-400 transition-colors">
-              AI Features
-            </a>
-            <a href="#faq" className="text-sm font-medium text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-teal-400 transition-colors">
-              FAQ
+            <Link
+              to={user ? userDashboardRoute : "/login"}
+              className="nav-link-editorial text-[12px] uppercase tracking-[1.3px] font-medium text-[#2e2623] hover:text-[#cb6440] transition-colors"
+            >
+              PATIENT PORTAL
+            </Link>
+            <a
+              href="#about"
+              className="nav-link-editorial text-[12px] uppercase tracking-[1.3px] font-medium text-[#2e2623] hover:text-[#cb6440] transition-colors"
+            >
+              ABOUT
             </a>
           </nav>
 
-          {/* Actions */}
-          <div className="hidden sm:flex items-center gap-3">
-            <ThemeToggle />
+          {/* Right: Sage Pill & Terracotta Button */}
+          <div className="hidden sm:flex items-center gap-4 shrink-0">
+            <div className="hidden lg:flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#4a6356] text-white text-[11px] font-semibold tracking-wider uppercase shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+              <span>ACCEPTING NEW PATIENTS</span>
+            </div>
 
             {user ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Link to={userDashboardRoute}>
-                  <Button variant="outline" size="sm" className="gap-1.5 text-xs font-semibold">
-                    <LayoutDashboard className="w-3.5 h-3.5 text-teal-600" />
-                    <span>My Dashboard ({user.role})</span>
-                  </Button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-[#d6cec3] bg-white px-4 py-2 text-xs font-semibold text-[#1e1815] hover:border-[#cb6440] hover:shadow-xs transition-all duration-200 flex items-center gap-2 cursor-pointer active:scale-[0.98]"
+                  >
+                    <LayoutDashboard className="w-3.5 h-3.5 text-[#cb6440]" />
+                    <span>Workspace ({user.role})</span>
+                  </button>
                 </Link>
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <button
+                  type="button"
                   onClick={logout}
-                  className="text-xs text-slate-500 hover:text-rose-600"
-                  title="Sign out"
+                  className="p-2 rounded-full text-[#8b7566] hover:text-rose-600 hover:bg-rose-50/70 transition-colors cursor-pointer"
+                  title="Sign out of MediSlot"
+                  aria-label="Sign out"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                </Button>
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
             ) : (
-              <>
-                <Link to="/login">
-                  <Button variant="ghost" size="sm">
-                    Sign In
-                  </Button>
-                </Link>
-                <Link to="/register">
-                  <Button variant="teal" size="sm" className="gap-1.5">
-                    Book Visit <ArrowRight className="w-3.5 h-3.5" />
-                  </Button>
-                </Link>
-              </>
+              <button
+                type="button"
+                onClick={onOpenBooking}
+                className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-6 py-2.5 text-sm font-medium transition-all duration-200 shadow-sm shadow-[#cb6440]/15 hover:shadow-md hover:shadow-[#cb6440]/25 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] cursor-pointer shrink-0 whitespace-nowrap"
+              >
+                Book Consultation
+              </button>
             )}
           </div>
 
-          {/* Mobile hamburger */}
+          {/* Mobile Menu Button */}
           <div className="flex sm:hidden items-center gap-2">
-            <ThemeToggle />
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-              aria-label="Toggle navigation menu"
+              type="button"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              className="p-2 rounded-xl text-[#2e2623] hover:text-[#cb6440] hover:bg-[#f5f1e9] transition-colors cursor-pointer"
+              aria-label="Toggle Navigation Menu"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-nav-drawer"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -108,82 +136,123 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-b border-slate-200 bg-white px-4 pt-2 pb-6 space-y-3 dark:border-slate-800 dark:bg-slate-950">
-          <div className="flex flex-col space-y-2 pt-2">
-            <a
-              href="#specialties"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-900 rounded-lg"
-            >
-              Specialties
-            </a>
-            <a
-              href="#how-it-works"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-900 rounded-lg"
-            >
-              How It Works
-            </a>
-            <a
-              href="#benefits"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-900 rounded-lg"
-            >
-              Benefits
-            </a>
-            <a
-              href="#ai-features"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-900 rounded-lg"
-            >
-              AI Features
-            </a>
-            <a
-              href="#faq"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-900 rounded-lg"
-            >
-              FAQ
-            </a>
-          </div>
+      {/* Animated Mobile Dropdown Drawer */}
+      <AnimatePresence initial={false}>
+        {mobileMenuOpen && (
+          <motion.div
+            id="mobile-nav-drawer"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.26, ease: EDITORIAL_EASE }}
+            className="sm:hidden overflow-hidden border-t border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210]"
+          >
+            <div className="px-6 py-6 space-y-5">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#4a6356]/12 text-[#4a6356] text-[10px] font-semibold tracking-wider uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#4a6356] animate-pulse" />
+                <span>Accepting New Patients</span>
+              </div>
 
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
-            {user ? (
-              <div className="space-y-2">
-                <Link
-                  to={userDashboardRoute}
+              <nav className="flex flex-col space-y-3" aria-label="Mobile navigation">
+                <a
+                  href="#doctors"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="block text-center text-xs p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/50 font-semibold text-teal-700 dark:text-teal-300"
+                  className="py-1 text-sm uppercase tracking-wider font-medium text-[#542f28] dark:text-[#f5f1e9] hover:text-[#cb6440] transition-colors"
                 >
-                  Go to {user.role} Dashboard
-                </Link>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    logout()
-                    setMobileMenuOpen(false)
-                  }}
-                  className="w-full text-xs"
+                  Our Physicians
+                </a>
+                <a
+                  href="#specialties"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="py-1 text-sm uppercase tracking-wider font-medium text-[#542f28] dark:text-[#f5f1e9] hover:text-[#cb6440] transition-colors"
                 >
-                  Sign Out
-                </Button>
-              </div>
-            ) : (
-              <div className="flex gap-2 pt-2">
-                <Link to="/login" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
-                  <Button variant="outline" className="w-full text-xs" size="sm">Sign In</Button>
+                  Services & Specialties
+                </a>
+                <Link
+                  to={user ? userDashboardRoute : "/login"}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="py-1 text-sm uppercase tracking-wider font-medium text-[#542f28] dark:text-[#f5f1e9] hover:text-[#cb6440] transition-colors"
+                >
+                  Patient Portal
                 </Link>
-                <Link to="/register" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
-                  <Button variant="teal" className="w-full text-xs" size="sm">Register</Button>
-                </Link>
+                <a
+                  href="#about"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="py-1 text-sm uppercase tracking-wider font-medium text-[#542f28] dark:text-[#f5f1e9] hover:text-[#cb6440] transition-colors"
+                >
+                  How It Works
+                </a>
+                <a
+                  href="#ai-features"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="py-1 text-sm uppercase tracking-wider font-medium text-[#542f28] dark:text-[#f5f1e9] hover:text-[#cb6440] transition-colors"
+                >
+                  Clinical AI Copilot
+                </a>
+                <a
+                  href="#faq"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="py-1 text-sm uppercase tracking-wider font-medium text-[#542f28] dark:text-[#f5f1e9] hover:text-[#cb6440] transition-colors"
+                >
+                  Patient FAQ
+                </a>
+              </nav>
+
+              <div className="pt-4 border-t border-[#dcd3c6] dark:border-[#362f2a] flex flex-col gap-3">
+                {user ? (
+                  <>
+                    <Link to={userDashboardRoute} onClick={() => setMobileMenuOpen(false)}>
+                      <button type="button" className="pill-button w-full justify-center">
+                        <LayoutDashboard className="w-4 h-4 text-[#e17145]" />
+                        <span>My Workspace ({user.role})</span>
+                      </button>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        logout()
+                        setMobileMenuOpen(false)
+                      }}
+                      className="w-full text-center text-xs uppercase tracking-wider text-[#8b7566] hover:text-rose-600 py-2 cursor-pointer"
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
+                      <button type="button" className="pill-button w-full justify-center">
+                        Sign In
+                      </button>
+                    </Link>
+                    {onOpenBooking ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMobileMenuOpen(false)
+                          onOpenBooking()
+                        }}
+                        className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white py-2.5 px-5 text-sm font-medium w-full inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      >
+                        Book Consultation <ArrowRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <Link to="/register" onClick={() => setMobileMenuOpen(false)}>
+                        <button
+                          type="button"
+                          className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white py-2.5 px-5 text-sm font-medium w-full inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                        >
+                          Book Appointment <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </Link>
+                    )}
+                  </>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   )
 }

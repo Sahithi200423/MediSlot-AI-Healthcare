@@ -72,7 +72,7 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
         setError(err.message || "Failed to load clinical note")
       })
       .finally(() => setIsLoading(false))
-  }, [isOpen, appointment])
+  }, [isOpen, appointment, initialDraft])
 
   if (!isOpen || !appointment) return null
 
@@ -129,35 +129,35 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1e1815]/50 backdrop-blur-sm font-editorial-sans">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh]"
+          className="relative w-full max-w-3xl bg-[#fbf9f5] border border-[#e8e2d8] rounded-3xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh] text-[#1e1815]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/90 shrink-0">
+          <div className="flex items-center justify-between px-6 py-4.5 border-b border-[#ece6dd] bg-[#fbf9f5] shrink-0">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+              <div className="p-2.5 rounded-xl bg-[#4a6356]/10 text-[#4a6356] border border-[#4a6356]/20">
                 <FileText className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-base font-semibold text-white">SOAP Clinical Documentation</h3>
+                  <h3 className="font-editorial-serif text-2xl font-normal text-[#1e1815]">SOAP Clinical Documentation</h3>
                   {isFinalized ? (
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#4a6356]/15 text-[#4a6356] border border-[#4a6356]/30 flex items-center gap-1">
                       <Lock className="w-3 h-3" />
                       Finalized & Sealed
                     </span>
                   ) : (
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#cb6440]/15 text-[#cb6440] border border-[#cb6440]/30 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       Draft Note
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-[#6e6059]">
                   Patient: {appointment.patient?.profile.firstName} {appointment.patient?.profile.lastName} • Ref: {appointment.bookingReference}
                 </p>
               </div>
@@ -165,21 +165,21 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              className="p-1.5 rounded-full text-[#8c7e77] hover:text-[#1e1815] hover:bg-[#ece6dd] transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {error && (
-            <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center gap-2 text-rose-300 text-xs shrink-0">
+            <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-rose-700 text-xs shrink-0">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="mx-6 mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-2 text-emerald-300 text-xs shrink-0">
+            <div className="mx-6 mt-4 p-3 rounded-xl bg-[#4a6356]/10 border border-[#4a6356]/30 flex items-center gap-2 text-[#4a6356] text-xs shrink-0">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>{successMsg}</span>
             </div>
@@ -188,13 +188,13 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
           {/* Form Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {isLoading ? (
-              <div className="py-12 text-center text-slate-400 text-sm">Loading consultation notes...</div>
+              <div className="py-12 text-center text-[#8c7e77] text-sm">Loading consultation notes...</div>
             ) : (
               <>
                 {/* S: Subjective */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-sky-400 uppercase tracking-wider">
+                    <label className="text-xs font-bold text-[#cb6440] uppercase tracking-wider">
                       S — Subjective (Symptoms & Patient History)
                     </label>
                   </div>
@@ -204,13 +204,13 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
                     disabled={isFinalized || isSaving}
                     rows={3}
                     placeholder="Describe patient's chief complaint, duration, onset, pain scale, and reported symptoms..."
-                    className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-700 disabled:bg-slate-950/30 disabled:text-slate-400 rounded-xl text-white text-xs focus:outline-none focus:border-sky-500 transition resize-none font-mono"
+                    className="w-full px-3.5 py-2.5 bg-white border border-[#e4ded5] disabled:bg-[#f8f5ee] disabled:text-[#8c7e77] rounded-xl text-[#1e1815] text-xs focus:outline-none focus:border-[#cb6440] transition resize-none font-mono"
                   />
                 </div>
 
                 {/* O: Objective */}
                 <div>
-                  <label className="block text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-bold text-[#4a6356] uppercase tracking-wider mb-1.5">
                     O — Objective (Physical Exam & Clinical Findings)
                   </label>
                   <textarea
@@ -219,13 +219,13 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
                     disabled={isFinalized || isSaving}
                     rows={3}
                     placeholder="Vital signs, physical examinations, heart/lung auscultation, lab results..."
-                    className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-700 disabled:bg-slate-950/30 disabled:text-slate-400 rounded-xl text-white text-xs focus:outline-none focus:border-sky-500 transition resize-none font-mono"
+                    className="w-full px-3.5 py-2.5 bg-white border border-[#e4ded5] disabled:bg-[#f8f5ee] disabled:text-[#8c7e77] rounded-xl text-[#1e1815] text-xs focus:outline-none focus:border-[#cb6440] transition resize-none font-mono"
                   />
                 </div>
 
                 {/* A: Assessment */}
                 <div>
-                  <label className="block text-xs font-bold text-amber-400 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-bold text-[#8c6b3e] uppercase tracking-wider mb-1.5">
                     A — Assessment (Clinical Diagnosis & Differential)
                   </label>
                   <textarea
@@ -234,13 +234,13 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
                     disabled={isFinalized || isSaving}
                     rows={2}
                     placeholder="Primary diagnosis, differential diagnoses, progression status..."
-                    className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-700 disabled:bg-slate-950/30 disabled:text-slate-400 rounded-xl text-white text-xs focus:outline-none focus:border-sky-500 transition resize-none font-mono"
+                    className="w-full px-3.5 py-2.5 bg-white border border-[#e4ded5] disabled:bg-[#f8f5ee] disabled:text-[#8c7e77] rounded-xl text-[#1e1815] text-xs focus:outline-none focus:border-[#cb6440] transition resize-none font-mono"
                   />
                 </div>
 
                 {/* P: Plan */}
                 <div>
-                  <label className="block text-xs font-bold text-purple-400 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-bold text-[#1e1815] uppercase tracking-wider mb-1.5">
                     P — Plan (Treatment, Diagnostics, Referrals)
                   </label>
                   <textarea
@@ -249,18 +249,18 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
                     disabled={isFinalized || isSaving}
                     rows={3}
                     placeholder="Prescribed medications, diagnostic workups, dietary recommendations, follow-up timeline..."
-                    className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-700 disabled:bg-slate-950/30 disabled:text-slate-400 rounded-xl text-white text-xs focus:outline-none focus:border-sky-500 transition resize-none font-mono"
+                    className="w-full px-3.5 py-2.5 bg-white border border-[#e4ded5] disabled:bg-[#f8f5ee] disabled:text-[#8c7e77] rounded-xl text-[#1e1815] text-xs focus:outline-none focus:border-[#cb6440] transition resize-none font-mono"
                   />
                 </div>
 
                 {/* Amendment history if any */}
                 {existingNote?.amendmentNotes && (
-                  <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
-                    <p className="text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <div className="p-3.5 rounded-xl bg-white border border-[#e8e2d8]">
+                    <p className="text-xs font-semibold text-[#1e1815] mb-1 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-[#cb6440]" />
                       <span>Legal Amendments & Addenda Log:</span>
                     </p>
-                    <pre className="text-[11px] text-slate-400 font-mono whitespace-pre-wrap">
+                    <pre className="text-[11px] text-[#6e6059] font-mono whitespace-pre-wrap">
                       {existingNote.amendmentNotes}
                     </pre>
                   </div>
@@ -268,8 +268,8 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
 
                 {/* If Finalized, Addendum Box */}
                 {isFinalized && (
-                  <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
-                    <label className="block text-xs font-semibold text-amber-300">
+                  <div className="p-4 rounded-xl bg-[#fbf5f2] border border-[#cb6440]/30 space-y-2">
+                    <label className="block text-xs font-semibold text-[#cb6440]">
                       Add Addendum to Finalized Record
                     </label>
                     <textarea
@@ -278,7 +278,7 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
                       disabled={isSaving}
                       rows={2}
                       placeholder="Add timestamped correction or follow-up note..."
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 transition resize-none"
+                      className="w-full px-3 py-2 bg-white border border-[#e4ded5] rounded-xl text-[#1e1815] text-xs focus:outline-none focus:border-[#cb6440] transition resize-none"
                     />
                   </div>
                 )}
@@ -287,8 +287,8 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
           </div>
 
           {/* Footer Controls */}
-          <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between shrink-0">
-            <div className="text-[11px] text-slate-500">
+          <div className="px-6 py-4 border-t border-[#ece6dd] bg-[#fbf9f5] flex items-center justify-between shrink-0">
+            <div className="text-[11px] text-[#8c7e77]">
               {isFinalized ? (
                 <span>Sealed on {existingNote?.finalizedAt ? new Date(existingNote.finalizedAt).toLocaleString() : "record"}</span>
               ) : (
@@ -301,7 +301,7 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
                 type="button"
                 onClick={onClose}
                 disabled={isSaving}
-                className="px-4 py-2 text-xs text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition"
+                className="px-4 py-2 text-xs text-[#6e6059] hover:text-[#1e1815] rounded-full transition cursor-pointer"
               >
                 Close
               </button>
@@ -311,7 +311,7 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
                   type="button"
                   onClick={() => handleSave("FINALIZED")}
                   disabled={isSaving || !amendment.trim()}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-medium transition disabled:opacity-50"
+                  className="rounded-full px-5 py-2 bg-[#cb6440] hover:bg-[#b85633] text-white text-xs font-medium transition disabled:opacity-50 cursor-pointer"
                 >
                   Append Addendum
                 </button>
@@ -321,7 +321,7 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
                     type="button"
                     onClick={() => handleSave("DRAFT")}
                     disabled={isSaving || !subjective.trim()}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-medium transition disabled:opacity-50"
+                    className="rounded-full flex items-center gap-1.5 px-4 py-2 bg-white border border-[#dcd3c6] hover:border-[#cb6440] text-[#1e1815] text-xs font-medium transition disabled:opacity-50 cursor-pointer"
                   >
                     <Save className="w-3.5 h-3.5" />
                     <span>Save Draft</span>
@@ -330,7 +330,7 @@ export const SoapNoteEditorModal: React.FC<SoapNoteEditorModalProps> = ({
                     type="button"
                     onClick={() => handleSave("FINALIZED")}
                     disabled={isSaving || !subjective.trim() || !assessment.trim()}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium transition disabled:opacity-50 shadow-lg shadow-emerald-600/20"
+                    className="rounded-full flex items-center gap-1.5 px-5 py-2 bg-[#4a6356] hover:bg-[#3d5448] text-white text-xs font-medium transition disabled:opacity-50 shadow-xs cursor-pointer"
                   >
                     <Lock className="w-3.5 h-3.5" />
                     <span>Finalize & Seal Note</span>

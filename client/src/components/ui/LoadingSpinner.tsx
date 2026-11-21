@@ -15,9 +15,9 @@ export function LoadingSpinner({ size = "md", className, text }: LoadingSpinnerP
   }
 
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-2", className)}>
-      <Loader2 className={cn("animate-spin text-teal-600 dark:text-teal-400", sizes[size])} />
-      {text && <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{text}</p>}
+    <div className={cn("flex flex-col items-center justify-center gap-2", className)} role="status" aria-live="polite">
+      <Loader2 className={cn("animate-spin text-[#cb6440] dark:text-[#f07e54]", sizes[size])} />
+      {text && <p className="text-xs font-medium text-[#8c7e77] dark:text-[#c4b5a8]">{text}</p>}
     </div>
   )
 }

@@ -10,9 +10,7 @@ import {
   updateSoapClinicalNoteSchema,
   createPrescriptionSchema,
 } from "../validators/medical.validator.js"
-import { PrismaClient } from "@prisma/client"
-
-const prisma = new PrismaClient()
+import { prisma } from "../config/db.js"
 
 function getUserId(req: Request): string {
   if (!req.user?.id) {
