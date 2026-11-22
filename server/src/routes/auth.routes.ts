@@ -1,22 +1,23 @@
 import { Router } from "express"
 import { AuthController } from "../controllers/auth.controller.js"
 import { authenticate } from "../middleware/auth.js"
+import { authLimiter, registerLimiter } from "../middleware/rateLimiter.js"
 
 const router = Router()
 
 /**
  * @route   POST /api/auth/register
- * @desc    Register a new patient
+ * @desc    Register a new patient (rate-limited: max 3 attempts/hr per IP)
  * @access  Public
  */
-router.post("/register", AuthController.register)
+router.post("/register", registerLimiter, AuthController.register)
 
 /**
  * @route   POST /api/auth/login
- * @desc    Authenticate user & return JWT token
+ * @desc    Authenticate user & return JWT token (rate-limited: max 5 failed attempts/15min per IP)
  * @access  Public
  */
-router.post("/login", AuthController.login)
+router.post("/login", authLimiter, AuthController.login)
 
 /**
  * @route   GET /api/auth/me

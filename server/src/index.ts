@@ -6,13 +6,25 @@ import { HealthController } from "./controllers/health.controller.js"
 import apiRouter from "./routes/index.js"
 import { notFoundHandler } from "./middleware/notFound.js"
 import { errorHandler } from "./middleware/errorHandler.js"
+import { requestIdMiddleware } from "./middleware/requestId.js"
 
 const app = express()
 
-// 1. Logging Middleware
-app.use(morgan(config.nodeEnv === "development" ? "dev" : "combined"))
+// 0. Trusted Reverse Proxy Configuration (Render load balancer client IP resolution)
+app.set("trust proxy", 1)
 
-// 2. CORS Configuration
+// 1. Request Correlation ID Middleware (assigned before logging and routing)
+app.use(requestIdMiddleware)
+
+// 2. Logging Middleware with Request Correlation ID
+morgan.token("req-id", (req: any) => req.id || "-")
+const morganFormat =
+  config.nodeEnv === "development"
+    ? "[:req-id] :method :url :status :response-time ms - :res[content-length]"
+    : '[:req-id] :remote-addr - :remote-user [:date[clf]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"'
+app.use(morgan(morganFormat))
+
+// 3. CORS Configuration
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -32,7 +44,8 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "X-Request-Id"],
+    exposedHeaders: ["X-Request-Id"],
   })
 )
 
