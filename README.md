@@ -15,9 +15,32 @@ MediSlot is a production-grade, full-stack healthcare SaaS platform engineered t
 
 ---
 
+## 🌐 Live Deployments
+
+| Component | Provider / Platform | Live URL | Status |
+|---|---|---|---|
+| **Production Web Client** | Cloudflare Pages (Edge CDN) | [https://medislot-ai-healthcare.pages.dev/](https://medislot-ai-healthcare.pages.dev/) | 🟢 Operational |
+| **Backend REST API** | Render Web Service (Node.js) | [https://medislot-backend-0cqg.onrender.com/api](https://medislot-backend-0cqg.onrender.com/api) | 🟢 Operational |
+| **AI Decision Support** | Render Web Service (Python FastAPI) | [https://medislot-ai-service.onrender.com](https://medislot-ai-service.onrender.com) | 🟢 Operational |
+
+---
+
+## 📚 Technical Documentation & Interview Materials
+
+For in-depth architectural specifications, demonstration scripts, and interview prep:
+* 🏛️ **[System Architecture & Design (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)**: Service topology, RBAC matrix, sequence flows, and Mermaid diagrams.
+* 🎬 **[Technical Demo Guide (docs/DEMO_GUIDE.md)](docs/DEMO_GUIDE.md)**: 2-to-3 minute interview walkthrough script with demo personas.
+* 📄 **[Resume Description (docs/RESUME_DESCRIPTION.md)](docs/RESUME_DESCRIPTION.md)**: ATS-friendly bullet points, elevator pitches, and portfolio summaries.
+* 🎓 **[Interview Preparation (docs/INTERVIEW_PREPARATION.md)](docs/INTERVIEW_PREPARATION.md)**: 25+ technical Q&As across React, TypeScript, Express, PostgreSQL, Prisma, JWT, Rate Limiting, and Cloud Hosting.
+
+---
+
 ## 🔑 Quick Demo Credentials (1-Click Login)
 
 The local application comes pre-seeded with 4 professional fictional demo accounts representing each role in the healthcare workflow. You can click any **Quick Demo Preset** button directly on the [Sign In Page](http://localhost:5173/login) or enter credentials manually:
+
+> [!WARNING]
+> **Demo Credentials Security Notice:** The credentials listed below are fictional demo accounts seeded strictly for local development, automated verification, and demonstration testing. They must not be used for production accounts or live clinical operations. For production deployments, demo accounts should be disabled or rotated with unique, strong passwords.
 
 | Role | Email | Password | Persona & Practice |
 |---|---|---|---|
@@ -109,10 +132,10 @@ graph TD
 - **Reschedule & Cancellation Workflows:** Self-service patient cancellation and reschedule handling with automated audit logging.
 
 ### 📂 Phase 5: Medical Records, SOAP Notes & Digital Prescriptions
-- **Encrypted Health Records Vault:** Secure document upload supporting lab reports, imaging files, and discharge summaries with category tagging.
+- **Secure Health Records Vault:** Secure document upload supporting lab reports, imaging files, and discharge summaries with category tagging. Files are encrypted in transit (TLS/HTTPS) and encrypted at rest by Supabase cloud storage (AES-256), protected by 5-minute time-limited signed URLs.
 - **Access Control Lists (ACL):** Explicit patient-granted doctor access permissions (`doctor_record_access`) with one-click revocation.
 - **Clinical SOAP Note Editor:** Structured clinical documentation tool for physicians (**S**ubjective, **O**bjective, **A**ssessment, **P**lan).
-- **Digital Prescription Generator:** Structured prescription builder with medication names, dosages, frequencies, duration, and doctor signatures.
+- **Digital Prescription Generator:** Structured prescription builder with medication names, dosages, frequencies, duration, physician license stamps, and unique tracking references.
 
 ### 🧠 Phase 6: Clinical AI Copilot & Document Understanding
 - **PDF & Optical OCR Text Extraction:** Dual-mode extraction supporting born-digital PDFs via `pypdf` and scanned image documents via `pytesseract`.
@@ -163,6 +186,33 @@ MediSlot treats patient data protection and clinical safety as first-class archi
   `"AI-Generated Clinical Decision Support Draft. Not a licensed physician, independent diagnosis, or autonomous treatment directive. Must be reviewed, verified, and approved by a licensed healthcare provider."`
 - **Sanitized Logging:** Console and server log handlers redact patient names, test results, and file contents.
 - **Immutable Audit Logging:** Every AI analysis, consultation draft generation, and clinician review attestation is committed to the PostgreSQL `audit_logs` table with actor profile ID and client IP.
+
+### 🔐 Production Security Hardening (PR #3.1)
+
+In addition to HIPAA-conscious data isolation and clinical safety gates, MediSlot incorporates production defense-in-depth controls:
+
+1. **Brute-Force & Credential-Stuffing Mitigation (`express-rate-limit`):**
+   - **Login Rate Limiter (`POST /api/auth/login`):** Enforces a strict sliding window of 15 minutes, allowing up to 5 failed attempts (`skipSuccessfulRequests: true`). Breaching the threshold triggers `HTTP 429 Too Many Requests` with RFC-compliant `RateLimit-*` and `Retry-After` headers.
+   - **Registration Rate Limiter (`POST /api/auth/register`):** Stricter window of 1 hour, allowing up to 3 account creations per IP to mitigate automated bot registrations.
+   - **Structured Error Payload:** All rate limit rejections emit a standardized machine-readable JSON response:
+     ```json
+     {
+       "error": "Too many requests",
+       "message": "Too many login attempts. Please try again after 15 minutes.",
+       "code": "RATE_LIMIT_EXCEEDED"
+     }
+     ```
+
+2. **Distributed Request Correlation & Traceability (`requestIdMiddleware`):**
+   - **Header Ingestion & Strict Regex Validation:** Intercepts incoming `X-Request-Id` headers and validates against `/^[a-zA-Z0-9_\-]{8,64}$/`. Malformed, empty, or adversarial headers (e.g. CRLF injection, XSS characters) are rejected and replaced.
+   - **Cryptographic UUID v4 Fallback:** When the incoming header is omitted or invalid, generates an RFC 4122 compliant UUID v4 using Node's native `crypto.randomUUID()`.
+   - **Full Lifecycle Propagation:** Attached to the Express request (`req.id`), returned in outgoing response headers (`X-Request-Id`), exposed via CORS (`exposedHeaders: ['X-Request-Id']`), and integrated into Morgan HTTP access logs (`[:date[iso]] [:req-id] :method :url :status :response-time ms`).
+
+3. **Reverse Proxy Trust:**
+   - Configured `app.set("trust proxy", 1)` so Express accurately resolves client IPs from `X-Forwarded-For` behind Cloudflare Pages and Render reverse proxies.
+
+4. **Automated Verification:**
+   - Backed by an automated 19-assertion security test suite (`server/scripts/verify-pr3-1-security.cjs`) validating all rate limiter windows, header responses, UUID generation, CORS exposure, and Morgan integration.
 
 ---
 
@@ -351,7 +401,9 @@ OPENAI_API_KEY=""
 
 ---
 
-## 🧪 Phase 7 Quality Audit & Verification Evidence
+## 🧪 Testing & Quality Verification Suites
+
+MediSlot includes multiple levels of automated verification: full-stack business journey audits, production security suites, and live cloud deployment checks.
 
 MediSlot has undergone a comprehensive, automated quality audit (`server/scripts/test-phase7-audit.cjs`) evaluating all user journeys, permissions, medical record operations, clinical AI pipelines, and database concurrency controls against live Supabase PostgreSQL and Supabase Storage using synthetic fictional records:
 
@@ -415,6 +467,38 @@ OVERALL STATUS: 🎉 100% PASS
 
 ---
 
+### 🛡️ PR #3.1 Security Hardening Test Suite (19/19 Passed — 100% PASS)
+
+Verifies authentication rate limiting, credential protection, request correlation IDs, CORS exposure, and log format integration:
+
+```bash
+cd server
+node scripts/verify-pr3-1-security.cjs
+```
+
+**Verification Results:**
+- ✅ `POST /api/auth/login` returns standard `RateLimit-*` and `Retry-After` headers on 429.
+- ✅ Successful logins reset / do not decrement the failure allowance (`skipSuccessfulRequests: true`).
+- ✅ Sixth failed login triggers `429 Too Many Requests` with code `RATE_LIMIT_EXCEEDED`.
+- ✅ `POST /api/auth/register` enforces 3 registrations per 1 hour per IP.
+- ✅ `X-Request-Id` echoing and sanitization tested against XSS and CRLF characters.
+- ✅ Cryptographically secure UUID v4 generated when `X-Request-Id` is omitted.
+- ✅ `X-Request-Id` included in CORS `Access-Control-Expose-Headers`.
+- ✅ Morgan HTTP logger formats log entries with request correlation ID.
+
+---
+
+### 🌐 Production Live Endpoint Health Check
+
+To verify the live cloud deployment across Cloudflare Pages, the Node.js backend, and the Python AI service:
+
+```bash
+cd server
+node scripts/verify-production-endpoints.cjs
+```
+
+---
+
 ## 🧠 Clinical AI: Deterministic vs. Live LLM Breakdown
 
 To adhere to clinical software safety best practices and avoid unsubstantiated claims, MediSlot cleanly bifurcates deterministic logic from generative LLM features:
@@ -454,6 +538,15 @@ To adhere to clinical software safety best practices and avoid unsubstantiated c
 > 3. **Emergency Care:** MediSlot is not an emergency triage tool. Any patient exhibiting acute red-flag symptoms (e.g., chest pain, respiratory distress, stroke indicators) must immediately contact local emergency medical services (911 / 112).
 > 4. **OCR Resolution Dependent:** Document extraction accuracy depends on source image quality. Distorted or handwritten records require manual clinician verification.
 
+### ⚙️ Technical & Infrastructure Limitations (Honest Disclosure)
+
+1. **Render Free-Tier Cold Starts:**
+   The backend API and Python AI microservice are hosted on Render free-tier instances. If idle for >15 minutes, containers enter a sleep state. The initial wake-up request may experience a **30 to 45 second latency**. Subsequent requests respond in <150 ms.
+2. **In-Memory Rate Limiting Scope:**
+   The current rate-limiting counters (`express-rate-limit`) are maintained in Node.js process memory. Counters reset upon server restart and apply per instance. In a horizontally scaled multi-instance cluster, an external distributed cache such as Redis (`rate-limit-redis`) would be required.
+3. **Single-Hop Reverse Proxy Trust:**
+   The Express backend is configured with `app.set("trust proxy", 1)`. This is ideal for single-hop load balancers (such as Render or Heroku). Deployments behind multi-hop reverse proxy chains should configure the exact trusted hop count or custom IP resolver.
+
 ---
 
 ## 🗺️ Implementation Status & Roadmap
@@ -465,9 +558,12 @@ To adhere to clinical software safety best practices and avoid unsubstantiated c
 - [x] **Phase 5**: Medical records vault, doctor record access ACLs, SOAP clinical note editor, and digital prescriptions.
 - [x] **Phase 6**: Clinical AI Copilot, Lab Report Analyzer, Optical OCR/PDF extraction, and patient educational features.
 - [x] **Phase 7**: Quality Audit & Demo Preparation: 1-click fictional demo presets, responsive UI verification, full-stack test suite (29/29 checks passed).
-- [ ] **Phase 8**: ML Appointment No-Show Prediction (`scikit-learn` historical gradient-boosted classifier).
-- [ ] **Phase 9**: AI Administrative Operations Assistant with `pgvector` Retrieval-Augmented Generation (RAG).
-- [ ] **Phase 10**: Cloud deployment (Vercel / Render / Supabase) and production hardening.
+- [x] **PR #3.1**: Production Security Hardening & Observability (Auth rate limiting, request correlation IDs, reverse proxy trust, 19/19 security test assertions).
+- [x] **Stage 8**: Production & Codebase Quality Verification (0 P0/P1 blocking issues, end-to-end audit passed with warnings).
+- [x] **Stage 9**: Job-Readiness & Portfolio Documentation (System architecture specs, demo guide, resume points, interview Q&A).
+- [ ] **Phase 8 / Future**: ML Appointment No-Show Prediction (`scikit-learn` historical gradient-boosted classifier).
+- [ ] **Phase 9 / Future**: Distributed Rate Limiting (Redis store) & Advanced Audit Metrics.
+- [ ] **Phase 10 / Future**: Cloudflare Pages + Render production CI/CD auto-deploy pipeline.
 
 ---
 
