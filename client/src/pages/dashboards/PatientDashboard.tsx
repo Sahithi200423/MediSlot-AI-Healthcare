@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, lazy, Suspense } from "react"
 import { 
   Calendar, Clock, Search, FileText, 
   CheckCircle2, Upload, Plus, Building2, Stethoscope, 
@@ -19,17 +19,19 @@ import {
   type Prescription
 } from "@/lib/api"
 import { toast } from "sonner"
-import { BookingModal } from "@/components/booking/BookingModal"
-import { AppointmentDetailsModal } from "@/components/booking/AppointmentDetailsModal"
-import { RescheduleModal } from "@/components/booking/RescheduleModal"
-import { CancelModal } from "@/components/booking/CancelModal"
-import { UploadRecordModal } from "@/components/medical/UploadRecordModal"
-import { RecordViewerModal } from "@/components/medical/RecordViewerModal"
-import { DoctorAccessModal } from "@/components/medical/DoctorAccessModal"
-import { PrescriptionViewerModal } from "@/components/medical/PrescriptionViewerModal"
 import { AiConsentBanner } from "@/components/ai/AiConsentBanner"
-import { LabReportAnalyzerModal } from "@/components/ai/LabReportAnalyzerModal"
-import { PatientAiExplainerModal } from "@/components/ai/PatientAiExplainerModal"
+
+// Lazy-load dashboard dialogs to reduce initial JavaScript parse time
+const BookingModal = lazy(() => import("@/components/booking/BookingModal").then(m => ({ default: m.BookingModal })))
+const AppointmentDetailsModal = lazy(() => import("@/components/booking/AppointmentDetailsModal").then(m => ({ default: m.AppointmentDetailsModal })))
+const RescheduleModal = lazy(() => import("@/components/booking/RescheduleModal").then(m => ({ default: m.RescheduleModal })))
+const CancelModal = lazy(() => import("@/components/booking/CancelModal").then(m => ({ default: m.CancelModal })))
+const UploadRecordModal = lazy(() => import("@/components/medical/UploadRecordModal").then(m => ({ default: m.UploadRecordModal })))
+const RecordViewerModal = lazy(() => import("@/components/medical/RecordViewerModal").then(m => ({ default: m.RecordViewerModal })))
+const DoctorAccessModal = lazy(() => import("@/components/medical/DoctorAccessModal").then(m => ({ default: m.DoctorAccessModal })))
+const PrescriptionViewerModal = lazy(() => import("@/components/medical/PrescriptionViewerModal").then(m => ({ default: m.PrescriptionViewerModal })))
+const LabReportAnalyzerModal = lazy(() => import("@/components/ai/LabReportAnalyzerModal").then(m => ({ default: m.LabReportAnalyzerModal })))
+const PatientAiExplainerModal = lazy(() => import("@/components/ai/PatientAiExplainerModal").then(m => ({ default: m.PatientAiExplainerModal })))
 import type { PatientAiConsentStatus } from "@/lib/api"
 import { formatINR } from "@/lib/currency"
 
@@ -1084,90 +1086,130 @@ export function PatientDashboard() {
         </div>
       )}
 
-      {/* MODALS */}
-      <BookingModal
-        isOpen={isBookingOpen}
-        onClose={() => setIsBookingOpen(false)}
-        preselectedDoctor={doctorToBook}
-        clinics={clinics}
-        onBookingSuccess={handleBookingSuccess}
-      />
+      {/* MODALS - Lazy-loaded on demand */}
+      {isBookingOpen && (
+        <Suspense fallback={null}>
+          <BookingModal
+            isOpen={isBookingOpen}
+            onClose={() => setIsBookingOpen(false)}
+            preselectedDoctor={doctorToBook}
+            clinics={clinics}
+            onBookingSuccess={handleBookingSuccess}
+          />
+        </Suspense>
+      )}
 
-      <AppointmentDetailsModal
-        isOpen={isDetailsOpen}
-        onClose={() => setIsDetailsOpen(false)}
-        appointment={selectedAppointment}
-        onOpenReschedule={(apt) => {
-          setSelectedAppointment(apt)
-          setIsRescheduleOpen(true)
-        }}
-        onOpenCancel={(apt) => {
-          setSelectedAppointment(apt)
-          setIsCancelOpen(true)
-        }}
-      />
+      {isDetailsOpen && (
+        <Suspense fallback={null}>
+          <AppointmentDetailsModal
+            isOpen={isDetailsOpen}
+            onClose={() => setIsDetailsOpen(false)}
+            appointment={selectedAppointment}
+            onOpenReschedule={(apt) => {
+              setSelectedAppointment(apt)
+              setIsRescheduleOpen(true)
+            }}
+            onOpenCancel={(apt) => {
+              setSelectedAppointment(apt)
+              setIsCancelOpen(true)
+            }}
+          />
+        </Suspense>
+      )}
 
-      <RescheduleModal
-        isOpen={isRescheduleOpen}
-        onClose={() => setIsRescheduleOpen(false)}
-        appointment={selectedAppointment}
-        onRescheduled={handleRescheduled}
-      />
+      {isRescheduleOpen && (
+        <Suspense fallback={null}>
+          <RescheduleModal
+            isOpen={isRescheduleOpen}
+            onClose={() => setIsRescheduleOpen(false)}
+            appointment={selectedAppointment}
+            onRescheduled={handleRescheduled}
+          />
+        </Suspense>
+      )}
 
-      <CancelModal
-        isOpen={isCancelOpen}
-        onClose={() => setIsCancelOpen(false)}
-        appointment={selectedAppointment}
-        onCancelled={handleCancelled}
-      />
+      {isCancelOpen && (
+        <Suspense fallback={null}>
+          <CancelModal
+            isOpen={isCancelOpen}
+            onClose={() => setIsCancelOpen(false)}
+            appointment={selectedAppointment}
+            onCancelled={handleCancelled}
+          />
+        </Suspense>
+      )}
 
       {/* Phase Five Modals */}
-      <UploadRecordModal
-        isOpen={isUploadRecordOpen}
-        onClose={() => setIsUploadRecordOpen(false)}
-        onSuccess={(rec) => {
-          setMedicalRecords((prev) => [rec, ...prev])
-          toast.success("Medical record encrypted and saved to your vault.")
-        }}
-      />
+      {isUploadRecordOpen && (
+        <Suspense fallback={null}>
+          <UploadRecordModal
+            isOpen={isUploadRecordOpen}
+            onClose={() => setIsUploadRecordOpen(false)}
+            onSuccess={(rec) => {
+              setMedicalRecords((prev) => [rec, ...prev])
+              toast.success("Medical record encrypted and saved to your vault.")
+            }}
+          />
+        </Suspense>
+      )}
 
-      <RecordViewerModal
-        isOpen={isRecordViewerOpen}
-        record={viewingRecord}
-        onClose={() => {
-          setIsRecordViewerOpen(false)
-          setViewingRecord(null)
-        }}
-      />
+      {isRecordViewerOpen && (
+        <Suspense fallback={null}>
+          <RecordViewerModal
+            isOpen={isRecordViewerOpen}
+            record={viewingRecord}
+            onClose={() => {
+              setIsRecordViewerOpen(false)
+              setViewingRecord(null)
+            }}
+          />
+        </Suspense>
+      )}
 
-      <DoctorAccessModal
-        isOpen={isDoctorAccessOpen}
-        onClose={() => setIsDoctorAccessOpen(false)}
-      />
+      {isDoctorAccessOpen && (
+        <Suspense fallback={null}>
+          <DoctorAccessModal
+            isOpen={isDoctorAccessOpen}
+            onClose={() => setIsDoctorAccessOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <PrescriptionViewerModal
-        isOpen={isPrescriptionViewerOpen}
-        prescription={viewingPrescription}
-        onClose={() => {
-          setIsPrescriptionViewerOpen(false)
-          setViewingPrescription(null)
-        }}
-      />
+      {isPrescriptionViewerOpen && (
+        <Suspense fallback={null}>
+          <PrescriptionViewerModal
+            isOpen={isPrescriptionViewerOpen}
+            prescription={viewingPrescription}
+            onClose={() => {
+              setIsPrescriptionViewerOpen(false)
+              setViewingPrescription(null)
+            }}
+          />
+        </Suspense>
+      )}
 
-      <LabReportAnalyzerModal
-        isOpen={isLabAnalyzerOpen}
-        record={analyzingRecord}
-        onClose={() => {
-          setIsLabAnalyzerOpen(false)
-          setAnalyzingRecord(null)
-        }}
-      />
+      {isLabAnalyzerOpen && (
+        <Suspense fallback={null}>
+          <LabReportAnalyzerModal
+            isOpen={isLabAnalyzerOpen}
+            record={analyzingRecord}
+            onClose={() => {
+              setIsLabAnalyzerOpen(false)
+              setAnalyzingRecord(null)
+            }}
+          />
+        </Suspense>
+      )}
 
-      <PatientAiExplainerModal
-        isOpen={isPatientAiOpen}
-        patientId={user?.id || ""}
-        onClose={() => setIsPatientAiOpen(false)}
-      />
+      {isPatientAiOpen && (
+        <Suspense fallback={null}>
+          <PatientAiExplainerModal
+            isOpen={isPatientAiOpen}
+            patientId={user?.id || ""}
+            onClose={() => setIsPatientAiOpen(false)}
+          />
+        </Suspense>
+      )}
     </DashboardShell>
   )
 }

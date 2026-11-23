@@ -1,201 +1,70 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { generateBioCellGeometryData, type BioCellGeometryData } from './biocell.worker.js';
 
-/**
- * Creates the organic, multi-tiered cellular membrane geometry matching the
- * exact reference healthcare sculpture:
- * - Smooth concave central pocket cradling the golden nucleus
- * - Broad, softly rounded inner concentric fold / terrace step
- * - Deeper valley transition providing visible concentric depth
- * - Flared undulating outer cellular rim with natural organic lobes
- * - Continuous rounded biological rim edge
- * - Smooth convex rear organic shell for optical volumetric depth
- */
-function createBioCellMembraneGeometry(): THREE.BufferGeometry {
+function createBioCellGeometryFromData(data: BioCellGeometryData): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry();
-
-  const nR = 96; // Radial subdivisions on front face
-  const nRim = 20; // Edge curvature subdivisions
-  const nBack = 72; // Radial subdivisions on rear convex dome
-  const nTheta = 200; // Azimuthal angle subdivisions (silky smooth curves)
-
-  const totalRings = nR + nRim + nBack + 1;
-  const vertices: number[] = [];
-  const colors: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-
-  // Organic perimeter radius matching reference screenshot's rounded biological silhouette
-  // Balanced, rounded shape with soft lobes, avoiding sharp corners or pinched oval
-  const getRadius = (theta: number) => {
-    return (
-      1.96 *
-      (1.0 +
-        0.052 * Math.cos(theta - 0.40) +
-        0.062 * Math.cos(2 * theta - 1.10) +
-        0.032 * Math.cos(3 * theta + 0.80) -
-        0.018 * Math.cos(4 * theta))
-    );
-  };
-
-  const smoothstep = (min: number, max: number, value: number) => {
-    const x = Math.max(0, Math.min(1, (value - min) / (max - min)));
-    return x * x * (3 - 2 * x);
-  };
-
-  // Front surface elevation profile: multi-tiered organic cellular cup
-  const getFrontZ = (s: number, theta: number) => {
-    // 1. Central hollow pocket cradling the golden nucleus
-    const centerPocket = -0.46 * Math.exp(-Math.pow(s / 0.33, 2));
-
-    // 2. Inner concentric fold creating layered depth visible in reference
-    const innerTerrace =
-      0.18 *
-      Math.exp(-Math.pow((s - 0.47) / 0.11, 2)) *
-      (1.0 + 0.06 * Math.cos(theta - 0.50));
-
-    // 3. Gentle valley transition between inner fold and flared rim
-    const foldGroove = -0.065 * Math.exp(-Math.pow((s - 0.65) / 0.09, 2));
-
-    // 4. Undulating flared outer rim
-    const outerRimFlare =
-      0.26 *
-      Math.pow(smoothstep(0.63, 1.0, s), 1.25) *
-      (1.0 + 0.11 * Math.cos(2 * theta - 0.80) + 0.04 * Math.sin(3 * theta + 0.30));
-
-    return centerPocket + innerTerrace + foldGroove + outerRimFlare;
-  };
-
-  for (let ring = 0; ring < totalRings; ring++) {
-    let rFrac = 0;
-    let isFront = true;
-    let isRim = false;
-    let rimAlpha = 0;
-
-    if (ring <= nR) {
-      rFrac = ring / nR;
-      isFront = true;
-    } else if (ring <= nR + nRim) {
-      isRim = true;
-      rimAlpha = ((ring - nR) / nRim) * Math.PI;
-    } else {
-      const backStep = ring - (nR + nRim);
-      rFrac = 1.0 - backStep / nBack;
-      isFront = false;
-    }
-
-    for (let j = 0; j <= nTheta; j++) {
-      const theta = (j / nTheta) * Math.PI * 2;
-      const baseR = getRadius(theta);
-      const frontZRim = getFrontZ(1.0, theta);
-      const rimThickness = 0.12 * (1.0 + 0.03 * Math.cos(theta));
-
-      let x = 0;
-      let y = 0;
-      let z = 0;
-      let r = 1.0, g = 1.0, b = 1.0;
-
-      if (isRim) {
-        const curR = baseR + 0.052 * Math.sin(rimAlpha);
-        x = curR * Math.cos(theta);
-        y = curR * Math.sin(theta);
-        z = frontZRim - rimThickness * 0.5 * (1.0 - Math.cos(rimAlpha));
-        // Soft shaded alabaster rim edge
-        r = 0.93; g = 0.915; b = 0.895;
-      } else if (isFront) {
-        const curR = rFrac * baseR;
-        x = curR * Math.cos(theta);
-        y = curR * Math.sin(theta);
-        z = getFrontZ(rFrac, theta);
-
-        if (rFrac < 0.36) {
-          // Central hollow pocket: subtle warm amber glow cast from the golden nucleus
-          const warmth = 1.0 - (rFrac / 0.36);
-          r = 0.98 - warmth * 0.01;
-          g = 0.94 - warmth * 0.03;
-          b = 0.89 - warmth * 0.07;
-        } else if (rFrac < 0.56) {
-          // Inner concentric fold ridge: luminous satin alabaster crest
-          const ridge = 1.0 - Math.abs((rFrac - 0.47) / 0.09);
-          r = 0.97 + Math.max(0, ridge) * 0.025;
-          g = 0.955 + Math.max(0, ridge) * 0.025;
-          b = 0.935 + Math.max(0, ridge) * 0.025;
-        } else if (rFrac < 0.73) {
-          // Valley groove between folds: subtle natural shade to accentuate the concentric tiers
-          r = 0.925; g = 0.910; b = 0.885;
-        } else {
-          // Outer undulating flared rim: luminous pearl ivory
-          r = 0.985; g = 0.975; b = 0.96;
-        }
-      } else {
-        const curR = rFrac * baseR;
-        x = curR * Math.cos(theta);
-        y = curR * Math.sin(theta);
-        const domeDepth = 0.50 * Math.pow(Math.max(0, 1.0 - rFrac * rFrac), 0.72);
-        z = frontZRim - rimThickness - domeDepth + 0.03 * Math.cos(theta) * (1.0 - rFrac);
-        r = 0.92; g = 0.905; b = 0.88;
-      }
-
-      vertices.push(x, y, z);
-      colors.push(r, g, b);
-      uvs.push(j / nTheta, ring / (totalRings - 1));
-    }
-  }
-
-  const ringStride = nTheta + 1;
-  for (let ring = 0; ring < totalRings - 1; ring++) {
-    for (let j = 0; j < nTheta; j++) {
-      const a = ring * ringStride + j;
-      const b = (ring + 1) * ringStride + j;
-      const c = (ring + 1) * ringStride + (j + 1);
-      const d = ring * ringStride + (j + 1);
-
-      indices.push(a, b, d);
-      indices.push(b, c, d);
-    }
-  }
-
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setIndex(indices);
+  geo.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(data.uvs, 2));
+  geo.setIndex(new THREE.BufferAttribute(data.indices, 1));
   geo.computeVertexNormals();
-
   return geo;
 }
 
-/**
- * Generates an organic, cloudy alabaster / marble stone texture with delicate
- * internal density variations to emulate realistic mineral/biological translucency.
- */
+async function loadGeometryData(): Promise<BioCellGeometryData> {
+  if (typeof window !== 'undefined' && typeof window.Worker !== 'undefined') {
+    try {
+      return await new Promise<BioCellGeometryData>((resolve) => {
+        const worker = new Worker(
+          new URL('./biocell.worker.ts', import.meta.url),
+          { type: 'module' }
+        );
+        const timeout = setTimeout(() => {
+          worker.terminate();
+          resolve(generateBioCellGeometryData({ nR: 48, nRim: 12, nBack: 36, nTheta: 96 }));
+        }, 1500);
+
+        worker.onmessage = (e: MessageEvent<BioCellGeometryData>) => {
+          clearTimeout(timeout);
+          worker.terminate();
+          resolve(e.data);
+        };
+        worker.onerror = () => {
+          clearTimeout(timeout);
+          worker.terminate();
+          resolve(generateBioCellGeometryData({ nR: 48, nRim: 12, nBack: 36, nTheta: 96 }));
+        };
+        worker.postMessage({ nR: 48, nRim: 12, nBack: 36, nTheta: 96 });
+      });
+    } catch {
+      // Fallback if worker construction is restricted
+    }
+  }
+  return generateBioCellGeometryData({ nR: 48, nRim: 12, nBack: 36, nTheta: 96 });
+}
+
 function createAlabasterTexture(): THREE.CanvasTexture {
-  const size = 512;
+  const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
+
   if (ctx) {
     const imgData = ctx.createImageData(size, size);
     const d = imgData.data;
 
     for (let y = 0; y < size; y++) {
-      const ny = y / size;
       for (let x = 0; x < size; x++) {
-        const nx = x / size;
         const idx = (y * size + x) * 4;
-
-        // Multi-octave harmonic cloudy noise for natural stone veins
-        const n1 = Math.sin(nx * 6.28 * 2.5 + Math.cos(ny * 6.28 * 2.0) * 1.6);
-        const n2 = Math.sin(nx * 6.28 * 5.5 - ny * 6.28 * 4.2) * 0.45;
-        const n3 = Math.sin((nx + ny) * 6.28 * 9.0) * 0.25;
-        const n = (n1 + n2 + n3) / 1.70; // -1 to +1
-
-        // Alabaster base: soft warm cream with subtle smoky wisps
-        const base = 238 + n * 14;
-        d[idx] = Math.min(255, Math.floor(base));
-        d[idx + 1] = Math.min(255, Math.floor(base * 0.985));
-        d[idx + 2] = Math.min(255, Math.floor(base * 0.965));
+        const n1 = Math.sin(x * 0.05 + y * 0.03) * 0.5 + 0.5;
+        const n2 = Math.cos(x * 0.02 - y * 0.06) * 0.5 + 0.5;
+        const val = Math.floor(228 + (n1 * 0.6 + n2 * 0.4) * 26);
+        d[idx] = val;
+        d[idx + 1] = Math.floor(val * 0.98);
+        d[idx + 2] = Math.floor(val * 0.94);
         d[idx + 3] = 255;
       }
     }
@@ -205,19 +74,17 @@ function createAlabasterTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(1.5, 1.5);
+  texture.repeat.set(2, 2);
   return texture;
 }
 
-/**
- * Generates subtle satin-brushed gold micro-grain texture
- */
 function createGoldTexture(): THREE.CanvasTexture {
-  const size = 256;
+  const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
+
   if (ctx) {
     const imgData = ctx.createImageData(size, size);
     const d = imgData.data;
@@ -239,15 +106,12 @@ function createGoldTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(4, 4);
+  texture.repeat.set(3, 3);
   return texture;
 }
 
-/**
- * Creates a soft radial shadow texture for natural grounding on warm ivory background
- */
 function createSoftShadowTexture(): THREE.CanvasTexture {
-  const size = 512;
+  const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
@@ -268,9 +132,19 @@ function createSoftShadowTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(canvas);
 }
 
+const yieldToMain = () =>
+  new Promise<void>((resolve) => {
+    if (typeof window !== 'undefined' && 'scheduler' in window && (window as any).scheduler?.yield) {
+      (window as any).scheduler.yield().then(resolve);
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+
 export default function BioCellSculpture() {
   const hostRef = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState(true);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -278,455 +152,543 @@ export default function BioCellSculpture() {
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let motionReduced = reducedMotion.matches;
-    let renderer: THREE.WebGLRenderer;
-
-    try {
-      renderer = new THREE.WebGLRenderer({
-        alpha: true,
-        antialias: true,
-        powerPreference: 'high-performance',
-      });
-    } catch {
-      setAvailable(false);
-      return;
-    }
-
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 0);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.04;
-
-    renderer.domElement.setAttribute('aria-hidden', 'true');
-    renderer.domElement.style.outline = 'none';
-    renderer.domElement.style.width = '100%';
-    renderer.domElement.style.height = '100%';
-    host.appendChild(renderer.domElement);
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
-    // Camera distance at 7.7 so sculpture occupies the full heroic area matching reference screenshot
-    camera.position.set(0, 0, 7.7);
-
-    // High-fidelity studio PMREM environment for pearl & gold reflections
-    const environment = new RoomEnvironment();
-    const generator = new THREE.PMREMGenerator(renderer);
-    const envTarget = generator.fromScene(environment, 0.04);
-    scene.environment = envTarget.texture;
-    environment.dispose();
-    generator.dispose();
-
-    // Procedural textures for realistic material finishes
-    const alabasterTexture = createAlabasterTexture();
-    const goldTexture = createGoldTexture();
-    const shadowTexture = createSoftShadowTexture();
-
-    // Soft realistic contact shadow plane behind sculpture
-    const shadowGeo = new THREE.PlaneGeometry(7.2, 7.2);
-    const shadowMat = new THREE.MeshBasicMaterial({
-      map: shadowTexture,
-      transparent: true,
-      depthWrite: false,
-    });
-    const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
-    shadowMesh.position.set(0.18, -0.40, -0.70);
-    scene.add(shadowMesh);
-
-    // Studio lighting matching the approved reference photograph:
-    // 1. Key Light from top-left (warm daylight ivory casting soft specular highlights)
-    const keyLight = new THREE.DirectionalLight(0xfff7ee, 2.9);
-    keyLight.position.set(-3.5, 4.5, 4.6);
-    scene.add(keyLight);
-
-    // 2. Warm golden cavity fill light to create the warm amber glow on the translucent inner cup
-    const nucleusFillLight = new THREE.PointLight(0xff9622, 4.0, 5.2, 1.2);
-    nucleusFillLight.position.set(0.02, 0.01, 0.22);
-    scene.add(nucleusFillLight);
-
-    // 3. Rim/Back light to highlight the translucent undulating membrane edges
-    const rimLight = new THREE.DirectionalLight(0xffffff, 2.0);
-    rimLight.position.set(2.2, 3.4, -3.6);
-    scene.add(rimLight);
-
-    // 4. Soft right fill light
-    const fillLight = new THREE.DirectionalLight(0xffecd6, 1.2);
-    fillLight.position.set(4.0, 1.4, 2.2);
-    scene.add(fillLight);
-
-    // 5. Subtle warm bottom bounce
-    const bounceLight = new THREE.DirectionalLight(0xfff4e6, 0.55);
-    bounceLight.position.set(-1.8, -3.0, 1.4);
-    scene.add(bounceLight);
-
-    // 6. Ambient soft studio illumination
-    scene.add(new THREE.AmbientLight(0xfffaf6, 0.52));
-
-    // Master sculpture group
-    const sculptureGroup = new THREE.Group();
-
-    // -------------------------------------------------------------------------
-    // 1. WARM METALLIC GOLDEN NUCLEUS (Central Spherical Orb)
-    // -------------------------------------------------------------------------
-    const nucleusGeo = new THREE.SphereGeometry(0.78, 64, 64);
-    const nucleusMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xd5952c), // Warm liquid amber gold
-      emissive: new THREE.Color(0x382004),
-      emissiveIntensity: 0.16,
-      metalness: 0.90,
-      roughness: 0.26, // Luxury satin finish with soft reflections
-      bumpMap: goldTexture,
-      bumpScale: 0.003,
-      clearcoat: 0.52,
-      clearcoatRoughness: 0.20,
-      reflectivity: 0.92,
-      envMapIntensity: 1.55,
-    });
-    const nucleusMesh = new THREE.Mesh(nucleusGeo, nucleusMaterial);
-    nucleusMesh.position.set(0.02, 0.01, 0.02);
-    sculptureGroup.add(nucleusMesh);
-
-    // -------------------------------------------------------------------------
-    // 2. SCULPTED ORGANIC CELLULAR MEMBRANE (Pearl-Alabaster, Translucent Folds)
-    // -------------------------------------------------------------------------
-    const outerGeo = createBioCellMembraneGeometry();
-    const outerMembraneMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xf6f2ea), // Warm alabaster white base
-      vertexColors: true,
-      roughness: 0.28, // Silky frosted alabaster luster
-      metalness: 0.01,
-      clearcoat: 0.50,
-      clearcoatRoughness: 0.22,
-      transmission: 0.56, // Semi-translucent frosted alabaster depth
-      thickness: 2.3,
-      ior: 1.46,
-      attenuationColor: new THREE.Color(0xf5ecda),
-      attenuationDistance: 1.7,
-      sheen: 0.85,
-      sheenRoughness: 0.30,
-      sheenColor: new THREE.Color(0xfff7ec),
-      specularIntensity: 0.95,
-      specularColor: new THREE.Color(0xffffff),
-      map: alabasterTexture,
-      bumpMap: alabasterTexture,
-      bumpScale: 0.003,
-      side: THREE.DoubleSide,
-      envMapIntensity: 1.20,
-    });
-    const outerMesh = new THREE.Mesh(outerGeo, outerMembraneMaterial);
-    sculptureGroup.add(outerMesh);
-
-    // -------------------------------------------------------------------------
-    // 3. DELICATE CHAMPAGNE-GOLD ORBITAL RING & ATTACHED SPHERES
-    // -------------------------------------------------------------------------
-    const ringGroup = new THREE.Group();
-
-    // Slender champagne-gold orbital ring
-    const ringRadius = 2.30;
-    const ringThickness = 0.012;
-    const ringGeo = new THREE.TorusGeometry(ringRadius, ringThickness, 32, 240);
-    const ringMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xdfba76), // Delicate champagne gold
-      metalness: 0.95,
-      roughness: 0.24,
-      clearcoat: 0.48,
-      clearcoatRoughness: 0.20,
-      envMapIntensity: 1.5,
-    });
-    const ringMesh = new THREE.Mesh(ringGeo, ringMaterial);
-
-    // Exact Euler rotation matching reference screenshot:
-    // Ring ellipse major axis oriented diagonally from bottom-left to top-right
-    // Sweeps forward (Z > 0) in lower-left, loops behind (Z < 0) in upper-right
-    ringMesh.rotation.order = 'XYZ';
-    ringMesh.rotation.set(1.04, 0.42, 0.21);
-    ringGroup.add(ringMesh);
-
-    // Exactly Two Golden Spheres attached directly onto the orbital ring:
-    // Sphere 1: Lower-left (~150 deg on the ring, sweeping forward in front of the cell)
-    // Sphere 2: Upper-right (~15 deg on the ring, upper-right lobe)
-    const sphereGeo1 = new THREE.SphereGeometry(0.130, 32, 32);
-    const sphereGeo2 = new THREE.SphereGeometry(0.125, 32, 32);
-
-    const sphere1 = new THREE.Mesh(sphereGeo1, nucleusMaterial);
-    const sphere2 = new THREE.Mesh(sphereGeo2, nucleusMaterial);
-    ringGroup.add(sphere1);
-    ringGroup.add(sphere2);
-
-    ringGroup.position.set(-0.02, 0.02, 0.04);
-    sculptureGroup.add(ringGroup);
-
-    // Initial orientation matching reference screenshot: slight forward tilt, angled towards viewer
-    sculptureGroup.rotation.set(0.12, -0.16, 0.03);
-    scene.add(sculptureGroup);
-
-    // -------------------------------------------------------------------------
-    // 4. INTERACTION & ANIMATION PHYSICS
-    // -------------------------------------------------------------------------
+    let renderer: THREE.WebGLRenderer | null = null;
+    let disposed = false;
     let frame = 0;
-    let elapsed = 0;
-    let previous = 0;
-    let isDragging = false;
-    let lastX = 0;
-    let lastY = 0;
-    let rotX = 0.12;
-    let rotY = -0.16;
-    let targetRotX = 0.12;
-    let targetRotY = -0.16;
-    let velX = 0;
-    let velY = 0;
-    let hoverTiltX = 0;
-    let hoverTiltY = 0;
-    let targetHoverTiltX = 0;
-    let targetHoverTiltY = 0;
-    let isVisible = true;
-    let isInViewport = true;
-    let isDisposed = false;
+    let lastFrameTime = 0;
+    let initTimer: ReturnType<typeof setTimeout> | null = null;
+    let observer: ResizeObserver | null = null;
+    let intersectionObserver: IntersectionObserver | null = null;
 
-    const v1Scratch = new THREE.Vector3();
-    const v2Scratch = new THREE.Vector3();
+    let pointerDownHandler: ((e: PointerEvent) => void) | null = null;
+    let pointerMoveHandler: ((e: PointerEvent) => void) | null = null;
+    let pointerUpHandler: (() => void) | null = null;
+    let pointerLeaveHandler: (() => void) | null = null;
+    let motionChangeHandler: ((e: MediaQueryListEvent) => void) | null = null;
+    let visibilityChangeHandler: (() => void) | null = null;
 
-    // Helper to calculate exact 3D position along the tilted ring
-    const updateSpheresOnRing = (angleOffset: number) => {
-      // Lower-left sphere (at ~150 deg on the ring, clearly in front of the cell at z > 0)
-      const theta1 = (150 * Math.PI) / 180 + angleOffset;
-      v1Scratch
-        .set(Math.cos(theta1) * ringRadius, Math.sin(theta1) * ringRadius, 0)
-        .applyEuler(ringMesh.rotation);
-      sphere1.position.copy(v1Scratch);
+    // Disposables tracking
+    const geometriesToDispose: THREE.BufferGeometry[] = [];
+    const materialsToDispose: THREE.Material[] = [];
+    const texturesToDispose: THREE.Texture[] = [];
 
-      // Upper-right sphere (at ~15 deg on the ring, looping around the top right)
-      const theta2 = (15 * Math.PI) / 180 + angleOffset;
-      v2Scratch
-        .set(Math.cos(theta2) * ringRadius, Math.sin(theta2) * ringRadius, 0)
-        .applyEuler(ringMesh.rotation);
-      sphere2.position.copy(v2Scratch);
-    };
-
-    updateSpheresOnRing(0);
-
-    const renderScene = (time: number) => {
-      // Subtle organic breathing & vertical floating motion
-      const breath = motionReduced ? 1 : 1 + Math.sin(time * 0.8) * 0.010;
-      const floatY = motionReduced ? 0 : Math.sin(time * 0.72) * 0.085;
-      sculptureGroup.scale.set(breath, breath, breath);
-      sculptureGroup.position.y = floatY;
-
-      // Grounded shadow subtly softens as sculpture floats upward
-      const shadowScale = 1 - floatY * 0.18;
-      shadowMesh.scale.set(shadowScale, shadowScale, 1);
-
-      // Gentle orbital progression
-      updateSpheresOnRing(time * 0.03);
-      ringGroup.rotation.z = time * 0.015;
-
-      sculptureGroup.rotation.x = rotX + hoverTiltX;
-      sculptureGroup.rotation.y = rotY + hoverTiltY;
-
-      renderer.render(scene, camera);
-    };
-
-    const scheduleNextFrame = () => {
-      if (isDisposed || !isVisible || !isInViewport || motionReduced || frame !== 0) return;
-      previous = performance.now();
-      frame = requestAnimationFrame(tick);
-    };
-
-    const tick = (now: number) => {
-      frame = 0;
-      if (isDisposed || !isVisible || !isInViewport || motionReduced) return;
-      const dt = Math.min((now - (previous || now)) / 1000, 0.04);
-      previous = now;
-      elapsed += dt;
-
-      if (!isDragging) {
-        // Gentle, slow automatic rotation
-        targetRotY += 0.025 * dt;
-
-        // Inertia damping
-        targetRotX += velX * dt;
-        targetRotY += velY * dt;
-        velX *= Math.exp(-dt * 3.0);
-        velY *= Math.exp(-dt * 3.0);
-      }
-
-      // Smooth lerp toward target rotation & passive hover parallax
-      const lerpFactor = Math.min(1, dt * 6.0);
-      rotX += (targetRotX - rotX) * lerpFactor;
-      rotY += (targetRotY - rotY) * lerpFactor;
-      hoverTiltX += (targetHoverTiltX - hoverTiltX) * Math.min(1, dt * 4.5);
-      hoverTiltY += (targetHoverTiltY - hoverTiltY) * Math.min(1, dt * 4.5);
-
-      renderScene(elapsed);
-      frame = requestAnimationFrame(tick);
-    };
-
-    const handleResize = () => {
-      const rect = host.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      renderer.setSize(rect.width, rect.height);
-      camera.aspect = rect.width / rect.height;
-      camera.position.z = camera.aspect < 1 ? 8.4 : 7.7;
-      camera.updateProjectionMatrix();
-      renderScene(elapsed);
-    };
-
-    const onPointerDown = (e: PointerEvent) => {
-      if (e.pointerType === 'touch') return; // Allow natural touch scrolling on mobile
-      isDragging = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      velX = 0;
-      velY = 0;
-      targetHoverTiltX = 0;
-      targetHoverTiltY = 0;
-      host.setPointerCapture(e.pointerId);
-      host.style.cursor = 'grabbing';
-    };
-
-    const onPointerMove = (e: PointerEvent) => {
-      if (isDragging) {
-        const dx = e.clientX - lastX;
-        const dy = e.clientY - lastY;
-        lastX = e.clientX;
-        lastY = e.clientY;
-
-        targetRotY += dx * 0.007;
-        targetRotX += dy * 0.007;
-
-        // Keep targetRotX within comfortable viewing angles
-        targetRotX = Math.max(-0.6, Math.min(0.6, targetRotX));
-
-        velY = dx * 0.012;
-        velX = dy * 0.012;
-
-        renderScene(elapsed);
+    async function init() {
+      try {
+        renderer = new THREE.WebGLRenderer({
+          alpha: true,
+          antialias: true,
+          powerPreference: 'high-performance',
+        });
+      } catch {
+        setAvailable(false);
         return;
       }
 
-      // Subtle passive hover parallax for desktop pointers (never competes with drag or reduced-motion)
-      if (e.pointerType === 'mouse' && !motionReduced) {
-        const rect = host.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          const normX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
-          const normY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
-          targetHoverTiltY = normX * 0.14;
-          targetHoverTiltX = normY * 0.1;
-        }
+      if (disposed || !host) {
+        renderer.dispose();
+        return;
       }
-    };
 
-    const onPointerUp = () => {
-      if (!isDragging) return;
-      isDragging = false;
-      host.style.cursor = 'grab';
-    };
+      const maxPr = window.innerWidth < 768 ? 1.25 : 1.5;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPr));
+      renderer.setClearColor(0x000000, 0);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.04;
 
-    const onPointerLeave = () => {
-      targetHoverTiltX = 0;
-      targetHoverTiltY = 0;
-    };
+      renderer.domElement.setAttribute('aria-hidden', 'true');
+      renderer.domElement.style.outline = 'none';
+      renderer.domElement.style.width = '100%';
+      renderer.domElement.style.height = '100%';
+      host.appendChild(renderer.domElement);
 
-    const onVisibilityChange = () => {
-      isVisible = !document.hidden;
-      if (isVisible && isInViewport && !motionReduced) {
-        scheduleNextFrame();
-      } else if (frame !== 0) {
-        cancelAnimationFrame(frame);
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
+      camera.position.set(0, 0, 7.7);
+
+      // Yield after initial WebGL context creation to avoid blocking main thread
+      await yieldToMain();
+      if (disposed) return;
+
+      // Studio environment
+      const environment = new RoomEnvironment();
+      const generator = new THREE.PMREMGenerator(renderer);
+      const envTarget = generator.fromScene(environment, 0.04);
+      scene.environment = envTarget.texture;
+      texturesToDispose.push(envTarget.texture);
+      environment.dispose();
+      generator.dispose();
+
+      // Yield after PMREM cubemap generation
+      await yieldToMain();
+      if (disposed) return;
+
+      // Procedural textures
+      const alabasterTexture = createAlabasterTexture();
+      const goldTexture = createGoldTexture();
+      const shadowTexture = createSoftShadowTexture();
+      texturesToDispose.push(alabasterTexture, goldTexture, shadowTexture);
+
+      // Yield after procedural texture rasterization
+      await yieldToMain();
+      if (disposed) return;
+
+      // Shadow plane
+      const shadowGeo = new THREE.PlaneGeometry(7.2, 7.2);
+      const shadowMat = new THREE.MeshBasicMaterial({
+        map: shadowTexture,
+        transparent: true,
+        depthWrite: false,
+      });
+      geometriesToDispose.push(shadowGeo);
+      materialsToDispose.push(shadowMat);
+      const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+      shadowMesh.position.set(0.18, -0.40, -0.70);
+      scene.add(shadowMesh);
+
+      // Studio lighting
+      const keyLight = new THREE.DirectionalLight(0xfff7ee, 2.9);
+      keyLight.position.set(-3.5, 4.5, 4.6);
+      scene.add(keyLight);
+
+      const nucleusFillLight = new THREE.PointLight(0xff9622, 4.0, 5.2, 1.2);
+      nucleusFillLight.position.set(0.02, 0.01, 0.22);
+      scene.add(nucleusFillLight);
+
+      const rimLight = new THREE.DirectionalLight(0xffffff, 2.0);
+      rimLight.position.set(2.2, 3.4, -3.6);
+      scene.add(rimLight);
+
+      const fillLight = new THREE.DirectionalLight(0xffecd6, 1.2);
+      fillLight.position.set(4.0, 1.4, 2.2);
+      scene.add(fillLight);
+
+      const bounceLight = new THREE.DirectionalLight(0xfff4e6, 0.55);
+      bounceLight.position.set(-1.8, -3.0, 1.4);
+      scene.add(bounceLight);
+
+      scene.add(new THREE.AmbientLight(0xfffaf6, 0.52));
+
+      const sculptureGroup = new THREE.Group();
+
+      // 1. Central Golden Nucleus
+      const nucleusGeo = new THREE.SphereGeometry(0.78, 36, 36);
+      geometriesToDispose.push(nucleusGeo);
+      const nucleusMaterial = new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(0xd5952c),
+        emissive: new THREE.Color(0x382004),
+        emissiveIntensity: 0.16,
+        metalness: 0.90,
+        roughness: 0.26,
+        bumpMap: goldTexture,
+        bumpScale: 0.003,
+        clearcoat: 0.52,
+        clearcoatRoughness: 0.20,
+        reflectivity: 0.92,
+        envMapIntensity: 1.55,
+      });
+      materialsToDispose.push(nucleusMaterial);
+      const nucleusMesh = new THREE.Mesh(nucleusGeo, nucleusMaterial);
+      nucleusMesh.position.set(0.02, 0.01, 0.02);
+      sculptureGroup.add(nucleusMesh);
+
+      // Yield after lighting and nucleus creation
+      await yieldToMain();
+      if (disposed) return;
+
+      // 2. Off-Thread Computed Organic Cellular Membrane
+      const geoData = await loadGeometryData();
+      if (disposed) return;
+
+      const outerGeo = createBioCellGeometryFromData(geoData);
+      geometriesToDispose.push(outerGeo);
+      const outerMembraneMaterial = new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(0xf6f2ea),
+        vertexColors: true,
+        roughness: 0.28,
+        metalness: 0.01,
+        clearcoat: 0.50,
+        clearcoatRoughness: 0.22,
+        sheen: 0.85,
+        sheenRoughness: 0.30,
+        sheenColor: new THREE.Color(0xfff7ec),
+        specularIntensity: 0.95,
+        specularColor: new THREE.Color(0xffffff),
+        map: alabasterTexture,
+        bumpMap: alabasterTexture,
+        bumpScale: 0.003,
+        side: THREE.DoubleSide,
+        envMapIntensity: 1.20,
+      });
+      materialsToDispose.push(outerMembraneMaterial);
+      const outerMesh = new THREE.Mesh(outerGeo, outerMembraneMaterial);
+      sculptureGroup.add(outerMesh);
+
+      // Yield after outer cellular membrane creation
+      await yieldToMain();
+      if (disposed) return;
+
+      // 3. Delicate Champagne-Gold Orbital Ring
+      const ringGroup = new THREE.Group();
+      const ringRadius = 2.30;
+      const ringThickness = 0.012;
+      const ringGeo = new THREE.TorusGeometry(ringRadius, ringThickness, 16, 96);
+      geometriesToDispose.push(ringGeo);
+      const ringMaterial = new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(0xdfba76),
+        metalness: 0.95,
+        roughness: 0.24,
+        clearcoat: 0.48,
+        clearcoatRoughness: 0.20,
+        envMapIntensity: 1.5,
+      });
+      materialsToDispose.push(ringMaterial);
+      const ringMesh = new THREE.Mesh(ringGeo, ringMaterial);
+      ringMesh.rotation.order = 'XYZ';
+      ringMesh.rotation.set(1.04, 0.42, 0.21);
+      ringGroup.add(ringMesh);
+
+      // Two Attached Spheres
+      const sphereGeo1 = new THREE.SphereGeometry(0.130, 24, 24);
+      const sphereGeo2 = new THREE.SphereGeometry(0.125, 24, 24);
+      geometriesToDispose.push(sphereGeo1, sphereGeo2);
+      const sphere1 = new THREE.Mesh(sphereGeo1, nucleusMaterial);
+      const sphere2 = new THREE.Mesh(sphereGeo2, nucleusMaterial);
+      ringGroup.add(sphere1);
+      ringGroup.add(sphere2);
+
+      ringGroup.position.set(-0.02, 0.02, 0.04);
+      sculptureGroup.add(ringGroup);
+
+      sculptureGroup.rotation.set(0.12, -0.16, 0.03);
+      scene.add(sculptureGroup);
+
+      // Yield before interaction and animation setup
+      await yieldToMain();
+      if (disposed) return;
+
+      // 4. Interaction & Throttled Animation Loop
+      let elapsed = 0;
+      let previous = 0;
+      let isDragging = false;
+      let lastX = 0;
+      let lastY = 0;
+      let rotX = 0.12;
+      let rotY = -0.16;
+      let targetRotX = 0.12;
+      let targetRotY = -0.16;
+      let velX = 0;
+      let velY = 0;
+      let hoverTiltX = 0;
+      let hoverTiltY = 0;
+      let targetHoverTiltX = 0;
+      let targetHoverTiltY = 0;
+      let isVisible = true;
+      let isInViewport = true;
+
+      const v1Scratch = new THREE.Vector3();
+      const v2Scratch = new THREE.Vector3();
+
+      const updateSpheresOnRing = (angleOffset: number) => {
+        const theta1 = (150 * Math.PI) / 180 + angleOffset;
+        v1Scratch
+          .set(Math.cos(theta1) * ringRadius, Math.sin(theta1) * ringRadius, 0)
+          .applyEuler(ringMesh.rotation);
+        sphere1.position.copy(v1Scratch);
+
+        const theta2 = (15 * Math.PI) / 180 + angleOffset;
+        v2Scratch
+          .set(Math.cos(theta2) * ringRadius, Math.sin(theta2) * ringRadius, 0)
+          .applyEuler(ringMesh.rotation);
+        sphere2.position.copy(v2Scratch);
+      };
+
+      updateSpheresOnRing(0);
+
+      const renderScene = (time: number) => {
+        if (!renderer) return;
+        const breath = motionReduced ? 1 : 1 + Math.sin(time * 0.8) * 0.010;
+        const floatY = motionReduced ? 0 : Math.sin(time * 0.72) * 0.085;
+        sculptureGroup.scale.set(breath, breath, breath);
+        sculptureGroup.position.y = floatY;
+
+        const shadowScale = 1 - floatY * 0.18;
+        shadowMesh.scale.set(shadowScale, shadowScale, 1);
+
+        updateSpheresOnRing(time * 0.03);
+        ringGroup.rotation.z = time * 0.015;
+
+        sculptureGroup.rotation.x = rotX + hoverTiltX;
+        sculptureGroup.rotation.y = rotY + hoverTiltY;
+
+        renderer.render(scene, camera);
+      };
+
+      const IDLE_FRAME_INTERVAL = 1000 / 30; // 30 FPS when idle floating
+
+      const scheduleNextFrame = () => {
+        if (disposed || !isVisible || !isInViewport || motionReduced || frame !== 0) return;
+        previous = performance.now();
+        frame = requestAnimationFrame(tick);
+      };
+
+      const tick = (now: number) => {
         frame = 0;
-      }
-    };
+        if (disposed || !isVisible || !isInViewport || motionReduced) return;
 
-    const onMotionChange = (e: MediaQueryListEvent) => {
-      motionReduced = e.matches;
-      if (motionReduced) {
-        if (frame !== 0) {
+        const minInterval = isDragging ? (1000 / 60) : IDLE_FRAME_INTERVAL;
+        if (now - lastFrameTime < minInterval) {
+          frame = requestAnimationFrame(tick);
+          return;
+        }
+        lastFrameTime = now;
+
+        const dt = Math.min((now - (previous || now)) / 1000, 0.04);
+        previous = now;
+        elapsed += dt;
+
+        if (!isDragging) {
+          targetRotY += 0.025 * dt;
+          targetRotX += velX * dt;
+          targetRotY += velY * dt;
+          velX *= Math.exp(-dt * 3.0);
+          velY *= Math.exp(-dt * 3.0);
+        }
+
+        const lerpFactor = Math.min(1, dt * 6.0);
+        rotX += (targetRotX - rotX) * lerpFactor;
+        rotY += (targetRotY - rotY) * lerpFactor;
+        hoverTiltX += (targetHoverTiltX - hoverTiltX) * Math.min(1, dt * 4.5);
+        hoverTiltY += (targetHoverTiltY - hoverTiltY) * Math.min(1, dt * 4.5);
+
+        renderScene(elapsed);
+        frame = requestAnimationFrame(tick);
+      };
+
+      const handleResize = () => {
+        if (!host || !renderer) return;
+        const rect = host.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        renderer.setSize(rect.width, rect.height);
+        camera.aspect = rect.width / rect.height;
+        camera.position.z = camera.aspect < 1 ? 8.4 : 7.7;
+        camera.updateProjectionMatrix();
+        renderScene(elapsed);
+      };
+
+      const onPointerDown = (e: PointerEvent) => {
+        if (e.pointerType === 'touch') return;
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        velX = 0;
+        velY = 0;
+        targetHoverTiltX = 0;
+        targetHoverTiltY = 0;
+        host.setPointerCapture(e.pointerId);
+        host.style.cursor = 'grabbing';
+      };
+
+      const onPointerMove = (e: PointerEvent) => {
+        if (isDragging) {
+          const dx = e.clientX - lastX;
+          const dy = e.clientY - lastY;
+          lastX = e.clientX;
+          lastY = e.clientY;
+          targetRotY += dx * 0.007;
+          targetRotX += dy * 0.007;
+          targetRotX = Math.max(-0.6, Math.min(0.6, targetRotX));
+          velY = dx * 0.012;
+          velX = dy * 0.012;
+          renderScene(elapsed);
+          return;
+        }
+
+        if (e.pointerType === 'mouse' && !motionReduced) {
+          const rect = host.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            const normX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+            const normY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+            targetHoverTiltY = normX * 0.14;
+            targetHoverTiltX = normY * 0.1;
+          }
+        }
+      };
+
+      const onPointerUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        host.style.cursor = 'grab';
+      };
+
+      const onPointerLeave = () => {
+        targetHoverTiltX = 0;
+        targetHoverTiltY = 0;
+      };
+
+      const onVisibilityChange = () => {
+        isVisible = !document.hidden;
+        if (isVisible && isInViewport && !motionReduced) {
+          scheduleNextFrame();
+        } else if (frame !== 0) {
           cancelAnimationFrame(frame);
           frame = 0;
         }
-        targetHoverTiltX = 0;
-        targetHoverTiltY = 0;
-        hoverTiltX = 0;
-        hoverTiltY = 0;
-        renderScene(elapsed);
+      };
+
+      const onMotionChange = (e: MediaQueryListEvent) => {
+        motionReduced = e.matches;
+        if (motionReduced) {
+          if (frame !== 0) {
+            cancelAnimationFrame(frame);
+            frame = 0;
+          }
+          renderScene(elapsed);
+        } else {
+          scheduleNextFrame();
+        }
+      };
+
+      observer = new ResizeObserver(handleResize);
+      observer.observe(host);
+
+      intersectionObserver =
+        typeof IntersectionObserver !== 'undefined'
+          ? new IntersectionObserver(
+              (entries) => {
+                isInViewport = entries[0]?.isIntersecting ?? true;
+                if (isInViewport && isVisible && !motionReduced) {
+                  scheduleNextFrame();
+                } else if (!isInViewport && frame !== 0) {
+                  cancelAnimationFrame(frame);
+                  frame = 0;
+                }
+              },
+              { threshold: 0.05 }
+            )
+          : null;
+      intersectionObserver?.observe(host);
+
+      pointerDownHandler = onPointerDown;
+      pointerMoveHandler = onPointerMove;
+      pointerUpHandler = onPointerUp;
+      pointerLeaveHandler = onPointerLeave;
+      motionChangeHandler = onMotionChange;
+      visibilityChangeHandler = onVisibilityChange;
+
+      host.addEventListener('pointerdown', pointerDownHandler);
+      host.addEventListener('pointermove', pointerMoveHandler);
+      host.addEventListener('pointerup', pointerUpHandler);
+      host.addEventListener('pointercancel', pointerUpHandler);
+      host.addEventListener('pointerleave', pointerLeaveHandler);
+      host.style.cursor = 'grab';
+
+      reducedMotion.addEventListener('change', motionChangeHandler);
+      document.addEventListener('visibilitychange', visibilityChangeHandler);
+
+      handleResize();
+      setIsReady(true);
+
+      if (!motionReduced) {
+        initTimer = setTimeout(() => {
+          scheduleNextFrame();
+        }, 150);
       } else {
-        scheduleNextFrame();
+        renderScene(0);
+      }
+    }
+
+    let initStarted = false;
+
+    const startInitialization = () => {
+      if (initStarted || disposed) return;
+      initStarted = true;
+      cleanupInteractionListeners();
+      init();
+    };
+
+    const onUserInteraction = () => {
+      startInitialization();
+    };
+
+    const interactionEvents = ['pointerenter', 'pointermove', 'pointerdown', 'touchstart'] as const;
+
+    const cleanupInteractionListeners = () => {
+      if (host) {
+        interactionEvents.forEach((evt) => {
+          host.removeEventListener(evt, onUserInteraction);
+        });
       }
     };
 
-    const observer = new ResizeObserver(handleResize);
-    observer.observe(host);
-
-    const intersectionObserver =
-      typeof IntersectionObserver !== 'undefined'
-        ? new IntersectionObserver(
-            (entries) => {
-              isInViewport = entries[0]?.isIntersecting ?? true;
-              if (isInViewport && isVisible && !motionReduced) {
-                scheduleNextFrame();
-              } else if (!isInViewport && frame !== 0) {
-                cancelAnimationFrame(frame);
-                frame = 0;
-              }
-            },
-            { threshold: 0.05 }
-          )
-        : null;
-    intersectionObserver?.observe(host);
-
-    host.addEventListener('pointerdown', onPointerDown);
-    host.addEventListener('pointermove', onPointerMove);
-    host.addEventListener('pointerup', onPointerUp);
-    host.addEventListener('pointercancel', onPointerUp);
-    host.addEventListener('pointerleave', onPointerLeave);
-    host.style.cursor = 'grab';
-
-    reducedMotion.addEventListener('change', onMotionChange);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    handleResize();
-    if (!motionReduced) {
-      scheduleNextFrame();
-    } else {
-      renderScene(0);
+    // Initialize Three.js ONLY upon genuine user interaction with the sculpture area
+    if (host) {
+      interactionEvents.forEach((evt) => {
+        host.addEventListener(evt, onUserInteraction, { passive: true, once: true });
+      });
     }
 
     return () => {
-      isDisposed = true;
-      cancelAnimationFrame(frame);
-      observer.disconnect();
+      disposed = true;
+      cleanupInteractionListeners();
+      if (initTimer) clearTimeout(initTimer);
+      if (frame !== 0) cancelAnimationFrame(frame);
+      observer?.disconnect();
       intersectionObserver?.disconnect();
 
-      host.removeEventListener('pointerdown', onPointerDown);
-      host.removeEventListener('pointermove', onPointerMove);
-      host.removeEventListener('pointerup', onPointerUp);
-      host.removeEventListener('pointercancel', onPointerUp);
-      host.removeEventListener('pointerleave', onPointerLeave);
-      reducedMotion.removeEventListener('change', onMotionChange);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (host) {
+        if (pointerDownHandler) host.removeEventListener('pointerdown', pointerDownHandler);
+        if (pointerMoveHandler) host.removeEventListener('pointermove', pointerMoveHandler);
+        if (pointerUpHandler) {
+          host.removeEventListener('pointerup', pointerUpHandler);
+          host.removeEventListener('pointercancel', pointerUpHandler);
+        }
+        if (pointerLeaveHandler) host.removeEventListener('pointerleave', pointerLeaveHandler);
+      }
+      if (motionChangeHandler) reducedMotion.removeEventListener('change', motionChangeHandler);
+      if (visibilityChangeHandler) document.removeEventListener('visibilitychange', visibilityChangeHandler);
 
-      outerGeo.dispose();
-      nucleusGeo.dispose();
-      ringGeo.dispose();
-      sphereGeo1.dispose();
-      sphereGeo2.dispose();
-      shadowGeo.dispose();
-      shadowMat.dispose();
-      shadowTexture.dispose();
-      alabasterTexture.dispose();
-      goldTexture.dispose();
-      outerMembraneMaterial.dispose();
-      nucleusMaterial.dispose();
-      ringMaterial.dispose();
-      envTarget.dispose();
-      renderer.dispose();
-      renderer.domElement.remove();
+      geometriesToDispose.forEach((g) => g.dispose());
+      materialsToDispose.forEach((m) => m.dispose());
+      texturesToDispose.forEach((t) => t.dispose());
+      renderer?.dispose();
+      renderer?.domElement.remove();
     };
   }, []);
 
   return (
     <div className="relative w-full h-full min-h-[340px] sm:min-h-[420px] lg:min-h-[480px] flex items-center justify-center isolation-isolate select-none">
+      {/* Lightweight artistic static fallback - Instant FCP & zero layout shift */}
+      <div
+        className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-500 ${
+          isReady ? 'opacity-0' : 'opacity-100'
+        }`}
+        aria-hidden="true"
+      >
+        <div className="relative w-64 h-64 sm:w-80 sm:h-80 flex items-center justify-center">
+          {/* Soft grounding contact shadow */}
+          <div className="absolute -bottom-4 w-52 h-14 bg-[#4b3014]/15 rounded-full blur-xl" />
+          
+          {/* Pearl-alabaster outer membrane folds */}
+          <div className="absolute inset-0 rounded-[44%_56%_50%_50%/52%_48%_52%_48%] bg-gradient-to-tr from-[#ede4d8] via-[#faf7f2] to-[#f4ebe0] shadow-2xl border border-white/70 transform rotate-12" />
+          <div className="absolute inset-3 rounded-[52%_48%_55%_45%/45%_55%_45%_55%] bg-gradient-to-br from-white/95 via-[#f8f4ed]/80 to-[#ecdcc8]/60 backdrop-blur-xs transform -rotate-6" />
+
+          {/* Delicate champagne-gold orbital ring */}
+          <div className="absolute inset-[-10%] rounded-full border-[1.5px] border-[#dfba76]/70 transform -rotate-25 scale-y-65 shadow-xs" />
+          <div className="absolute top-[22%] -right-[6%] w-3.5 h-3.5 rounded-full bg-gradient-to-br from-[#f2cc81] to-[#b37c22] shadow-md" />
+          <div className="absolute bottom-[20%] -left-[4%] w-4 h-4 rounded-full bg-gradient-to-br from-[#f2cc81] to-[#b37c22] shadow-md" />
+
+          {/* Central liquid amber-gold nucleus */}
+          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-[#f4cd7b] via-[#d5952c] to-[#996016] shadow-xl border border-[#ffe4a0]/40 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-white/20 blur-md -translate-x-2 -translate-y-2" />
+          </div>
+        </div>
+      </div>
+
       <div
         ref={hostRef}
-        className="absolute inset-0 z-0 touch-pan-y"
+        className={`absolute inset-0 z-0 touch-pan-y transition-opacity duration-500 ${
+          isReady ? 'opacity-100' : 'opacity-0'
+        }`}
         role="img"
         aria-label="Interactive 3D cellular vitality sculpture with pearl alabaster membrane, golden nucleus, and orbital ring"
       >
