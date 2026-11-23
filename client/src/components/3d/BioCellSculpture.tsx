@@ -598,20 +598,10 @@ export default function BioCellSculpture() {
     }
 
     let initStarted = false;
-    let idleCallbackId: number | null = null;
-    let fallbackTimerId: ReturnType<typeof setTimeout> | null = null;
 
     const startInitialization = () => {
       if (initStarted || disposed) return;
       initStarted = true;
-      if (idleCallbackId !== null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
-        window.cancelIdleCallback(idleCallbackId);
-        idleCallbackId = null;
-      }
-      if (fallbackTimerId !== null) {
-        clearTimeout(fallbackTimerId);
-        fallbackTimerId = null;
-      }
       cleanupInteractionListeners();
       init();
     };
@@ -620,41 +610,26 @@ export default function BioCellSculpture() {
       startInitialization();
     };
 
+    const interactionEvents = ['pointerenter', 'pointermove', 'pointerdown', 'touchstart'] as const;
+
     const cleanupInteractionListeners = () => {
       if (host) {
-        host.removeEventListener('pointerenter', onUserInteraction);
-        host.removeEventListener('pointerdown', onUserInteraction);
+        interactionEvents.forEach((evt) => {
+          host.removeEventListener(evt, onUserInteraction);
+        });
       }
     };
 
+    // Initialize Three.js ONLY upon genuine user interaction with the sculpture area
     if (host) {
-      host.addEventListener('pointerenter', onUserInteraction, { passive: true, once: true });
-      host.addEventListener('pointerdown', onUserInteraction, { passive: true, once: true });
-    }
-
-    // Defer initialization to browser idle period so it runs cleanly after critical render & hydration
-    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      idleCallbackId = (window as any).requestIdleCallback(
-        () => {
-          startInitialization();
-        },
-        { timeout: 2500 }
-      );
-    } else {
-      fallbackTimerId = setTimeout(() => {
-        startInitialization();
-      }, 1200);
+      interactionEvents.forEach((evt) => {
+        host.addEventListener(evt, onUserInteraction, { passive: true, once: true });
+      });
     }
 
     return () => {
       disposed = true;
       cleanupInteractionListeners();
-      if (idleCallbackId !== null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
-        window.cancelIdleCallback(idleCallbackId);
-      }
-      if (fallbackTimerId !== null) {
-        clearTimeout(fallbackTimerId);
-      }
       if (initTimer) clearTimeout(initTimer);
       if (frame !== 0) cancelAnimationFrame(frame);
       observer?.disconnect();
