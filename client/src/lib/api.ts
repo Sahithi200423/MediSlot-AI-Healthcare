@@ -46,6 +46,15 @@ export interface Doctor {
     email: string
     avatarUrl?: string
     phone?: string
+    clinicMemberships?: Array<{
+      clinic: {
+        id: string
+        name: string
+        city: string
+        state: string
+        address: string
+      }
+    }>
   }
   clinic?: {
     id: string
@@ -54,6 +63,13 @@ export interface Doctor {
     state: string
     address: string
   }
+  affiliatedClinics?: Array<{
+    id: string
+    name: string
+    city: string
+    state: string
+    address: string
+  }>
 }
 
 export interface AvailabilitySlot {
@@ -380,15 +396,62 @@ export interface AiAnalysisRecord {
 }
 
 
+// Client-side in-memory caching & request deduplication for read-only resources
+let doctorsCache: { data: Doctor[]; timestamp: number } | null = null;
+let doctorsInFlight: Promise<Doctor[]> | null = null;
+let clinicsCache: { data: Clinic[]; timestamp: number } | null = null;
+let clinicsInFlight: Promise<Clinic[]> | null = null;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+const REQUEST_TIMEOUT_MS = 8000; // 8 seconds timeout
+
+export function clearDirectoryCache() {
+  doctorsCache = null;
+  doctorsInFlight = null;
+  clinicsCache = null;
+  clinicsInFlight = null;
+}
+
 export const api = {
   // Clinics
-  async getClinics(): Promise<Clinic[]> {
-    const res = await fetch(`${API_BASE}/clinics?includeAll=true`, {
-      headers: getAuthHeaders(),
-    })
-    const json = await res.json()
-    if (!res.ok) throw new Error(json.error?.message || "Failed to fetch clinics")
-    return json.data?.clinics || []
+  async getClinics(forceRefresh = false): Promise<Clinic[]> {
+    const now = Date.now();
+    if (!forceRefresh && clinicsCache && (now - clinicsCache.timestamp < CACHE_TTL)) {
+      return clinicsCache.data;
+    }
+    if (!forceRefresh && clinicsInFlight) {
+      return clinicsInFlight;
+    }
+
+    const fetchPromise = (async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        const res = await fetch(`${API_BASE}/clinics?includeAll=true`, {
+          headers: getAuthHeaders(),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error?.message || "Failed to fetch clinics");
+        const list = json.data?.clinics || [];
+        clinicsCache = { data: list, timestamp: Date.now() };
+        return list;
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (clinicsCache?.data) {
+          console.warn("Clinics fetch timed out or failed, using cached:", err?.message);
+          return clinicsCache.data;
+        }
+        throw err;
+      } finally {
+        clinicsInFlight = null;
+      }
+    })();
+
+    if (!forceRefresh) {
+      clinicsInFlight = fetchPromise;
+    }
+    return fetchPromise;
   },
 
   async updateClinic(clinicId: string, data: Partial<Clinic>): Promise<Clinic> {
@@ -422,18 +485,58 @@ export const api = {
     return json.data?.invitation
   },
 
-  // Doctors
-  async getDoctors(specialty?: string, search?: string): Promise<Doctor[]> {
-    const params = new URLSearchParams()
-    if (specialty && specialty !== "all") params.append("specialty", specialty)
-    if (search) params.append("search", search)
+  // Doctors with in-memory caching and 8s timeout protection
+  async getDoctors(specialty?: string, search?: string, forceRefresh = false): Promise<Doctor[]> {
+    const hasFilters = Boolean((specialty && specialty !== "all") || (search && search.trim()));
+    const now = Date.now();
 
-    const res = await fetch(`${API_BASE}/doctors?${params.toString()}`, {
-      headers: getAuthHeaders(),
-    })
-    const json = await res.json()
-    if (!res.ok) throw new Error(json.error?.message || "Failed to fetch doctors")
-    return json.data?.doctors || []
+    if (!hasFilters && !forceRefresh && doctorsCache && (now - doctorsCache.timestamp < CACHE_TTL)) {
+      return doctorsCache.data;
+    }
+    if (!hasFilters && !forceRefresh && doctorsInFlight) {
+      return doctorsInFlight;
+    }
+
+    const fetchPromise = (async () => {
+      const params = new URLSearchParams();
+      if (specialty && specialty !== "all") params.append("specialty", specialty);
+      if (search) params.append("search", search.trim());
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+      try {
+        const res = await fetch(`${API_BASE}/doctors?${params.toString()}`, {
+          headers: getAuthHeaders(),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error?.message || "Failed to fetch doctors");
+        const doctors: Doctor[] = json.data?.doctors || [];
+
+        if (!hasFilters) {
+          doctorsCache = { data: doctors, timestamp: Date.now() };
+        }
+        return doctors;
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (doctorsCache?.data) {
+          console.warn("Doctors fetch timed out or failed, using cached directory:", err?.message);
+          return doctorsCache.data;
+        }
+        throw err;
+      } finally {
+        if (!hasFilters) {
+          doctorsInFlight = null;
+        }
+      }
+    })();
+
+    if (!hasFilters && !forceRefresh) {
+      doctorsInFlight = fetchPromise;
+    }
+    return fetchPromise;
   },
 
   async getDoctorSchedule(doctorId: string) {

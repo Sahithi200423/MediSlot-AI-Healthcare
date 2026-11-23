@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, lazy, Suspense } from "react"
 import { 
   Calendar, Clock, Users, FileText, 
   Sparkles, Bot, Stethoscope, Save,
@@ -11,9 +11,10 @@ import { Skeleton, SkeletonCard } from "@/components/ui/Skeleton"
 import { useAuth } from "@/context/AuthContext"
 import { api, API_BASE, type Doctor, type Appointment } from "@/lib/api"
 import { formatINR } from "@/lib/currency"
-import { SoapNoteEditorModal } from "@/components/medical/SoapNoteEditorModal"
-import { PrescriptionBuilderModal } from "@/components/medical/PrescriptionBuilderModal"
-import { AiCopilotModal } from "@/components/ai/AiCopilotModal"
+// Lazy-load clinical dialogs on demand
+const SoapNoteEditorModal = lazy(() => import("@/components/medical/SoapNoteEditorModal").then(m => ({ default: m.SoapNoteEditorModal })))
+const PrescriptionBuilderModal = lazy(() => import("@/components/medical/PrescriptionBuilderModal").then(m => ({ default: m.PrescriptionBuilderModal })))
+const AiCopilotModal = lazy(() => import("@/components/ai/AiCopilotModal").then(m => ({ default: m.AiCopilotModal })))
 
 const DAYS_OF_WEEK = [
   { index: 1, name: "Monday" },
@@ -1093,41 +1094,53 @@ export function DoctorDashboard() {
         </div>
       )}
 
-      {/* Phase Five Modals */}
-      <SoapNoteEditorModal
-        isOpen={isSoapModalOpen}
-        appointment={soapModalAppointment}
-        initialDraft={initialSoapDraft}
-        onClose={() => {
-          setIsSoapModalOpen(false)
-          setSoapModalAppointment(null)
-          setInitialSoapDraft(null)
-        }}
-      />
+      {/* Phase Five Modals - Lazy-Loaded */}
+      {isSoapModalOpen && (
+        <Suspense fallback={null}>
+          <SoapNoteEditorModal
+            isOpen={isSoapModalOpen}
+            appointment={soapModalAppointment}
+            initialDraft={initialSoapDraft}
+            onClose={() => {
+              setIsSoapModalOpen(false)
+              setSoapModalAppointment(null)
+              setInitialSoapDraft(null)
+            }}
+          />
+        </Suspense>
+      )}
 
-      <PrescriptionBuilderModal
-        isOpen={isRxModalOpen}
-        appointment={rxModalAppointment}
-        onClose={() => {
-          setIsRxModalOpen(false)
-          setRxModalAppointment(null)
-        }}
-      />
+      {isRxModalOpen && (
+        <Suspense fallback={null}>
+          <PrescriptionBuilderModal
+            isOpen={isRxModalOpen}
+            appointment={rxModalAppointment}
+            onClose={() => {
+              setIsRxModalOpen(false)
+              setRxModalAppointment(null)
+            }}
+          />
+        </Suspense>
+      )}
 
-      {/* Phase Six AI Copilot Modal */}
-      <AiCopilotModal
-        isOpen={isCopilotOpen}
-        appointment={copilotAppointment}
-        onClose={() => {
-          setIsCopilotOpen(false)
-          setCopilotAppointment(null)
-        }}
-        onAdoptSoapDraft={(draft) => {
-          setInitialSoapDraft(draft)
-          setSoapModalAppointment(copilotAppointment)
-          setIsSoapModalOpen(true)
-        }}
-      />
+      {/* Phase Six AI Copilot Modal - Lazy-Loaded */}
+      {isCopilotOpen && (
+        <Suspense fallback={null}>
+          <AiCopilotModal
+            isOpen={isCopilotOpen}
+            appointment={copilotAppointment}
+            onClose={() => {
+              setIsCopilotOpen(false)
+              setCopilotAppointment(null)
+            }}
+            onAdoptSoapDraft={(draft) => {
+              setInitialSoapDraft(draft)
+              setSoapModalAppointment(copilotAppointment)
+              setIsSoapModalOpen(true)
+            }}
+          />
+        </Suspense>
+      )}
     </DashboardShell>
   )
 }

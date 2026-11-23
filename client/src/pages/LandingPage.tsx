@@ -19,10 +19,14 @@ import {
 } from "lucide-react"
 import { Navbar } from "@/components/layout/Navbar"
 import { Footer } from "@/components/layout/Footer"
-import {
-  InteractiveBookingModal,
-  type BookingPreviewDoctor,
-} from "@/components/booking/InteractiveBookingModal"
+import type { BookingPreviewDoctor } from "@/components/booking/InteractiveBookingModal"
+
+// Lazy-load interactive booking wizard to reduce initial critical bundle size
+const InteractiveBookingModal = lazy(() =>
+  import("@/components/booking/InteractiveBookingModal").then((m) => ({
+    default: m.InteractiveBookingModal,
+  }))
+)
 import { Skeleton } from "@/components/ui/Skeleton"
 import { api, type Doctor } from "@/lib/api"
 import { formatINR } from "@/lib/currency"
@@ -42,18 +46,37 @@ interface DiscoveryDoctor extends BookingPreviewDoctor {
   nextAvailable: string
   city?: string
   isAccepting: boolean
+  clinics: string[]
+  clinicDisplay: string
+  affiliatedCount: number
 }
 
-function mapLiveDoctorToDiscovery(doc: Doctor): DiscoveryDoctor {
+function mapLiveDoctorToDiscovery(doc: Doctor, affiliatedClinics: string[] = []): DiscoveryDoctor {
   const first = doc.profile?.firstName?.trim() || "Specialist"
   const last = doc.profile?.lastName?.trim() || ""
   const initials = `${first[0] || "D"}${last[0] || "R"}`.toUpperCase()
+
+  const clinicSet = new Set<string>()
+  if (doc.clinic?.name) clinicSet.add(doc.clinic.name)
+  for (const c of affiliatedClinics) {
+    if (c) clinicSet.add(c)
+  }
+  const clinics = Array.from(clinicSet)
+  const primaryClinic = doc.clinic?.name || clinics[0] || "MediSlot Partner Clinic"
+  const affiliatedCount = Math.max(0, clinics.length - 1)
+  const clinicDisplay = affiliatedCount > 0
+    ? `${primaryClinic} (+${affiliatedCount} affiliated clinic${affiliatedCount > 1 ? 's' : ''})`
+    : primaryClinic
+
   return {
     id: doc.id,
     name: `Dr. ${first}${last ? ` ${last}` : ""}`,
     specialty: doc.specialty || "General Medicine",
-    clinic: doc.clinic?.name || "MediSlot Partner Clinic",
+    clinic: primaryClinic,
     city: doc.clinic ? `${doc.clinic.city}, ${doc.clinic.state}` : undefined,
+    clinics,
+    clinicDisplay,
+    affiliatedCount,
     experience:
       doc.yearsOfExperience > 0
         ? `${doc.yearsOfExperience} yrs clinical practice`
@@ -70,7 +93,16 @@ function mapLiveDoctorToDiscovery(doc: Doctor): DiscoveryDoctor {
 
 export function LandingPage() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [selectedSpecialty, setSelectedSpecialty] = useState("ALL")
+
+  // Debounce search query to prevent main-thread lag during fast typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
   const [showAllDoctors, setShowAllDoctors] = useState(false)
   const [liveDoctors, setLiveDoctors] = useState<DiscoveryDoctor[]>([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
@@ -88,12 +120,57 @@ export function LandingPage() {
       try {
         const doctors = await api.getDoctors()
         if (!cancelled && Array.isArray(doctors)) {
-          const sorted = [...doctors].sort(
+          // Deduplicate and aggregate strictly by unique doctor ID
+          // If a doctor practices at multiple clinics, consolidate affiliations into one profile
+          const doctorMap = new Map<string, Doctor>()
+          const affiliationsMap = new Map<string, Set<string>>()
+
+          for (const doc of doctors) {
+            if (!doc || !doc.id) continue
+
+            // Filter out confirmed test suite artifacts from public browsing
+            const email = doc.profile?.email || ""
+            const isSynthetic =
+              /_\d{10,14}@/.test(email) ||
+              /^(ai\.doc\.|sec\.doc[ab]\.|editorial\.doc\.|audit\.doc\.)/i.test(email)
+            if (isSynthetic) continue
+
+            if (!doctorMap.has(doc.id)) {
+              doctorMap.set(doc.id, doc)
+              affiliationsMap.set(doc.id, new Set())
+            }
+
+            if (doc.clinic?.name) {
+              affiliationsMap.get(doc.id)!.add(doc.clinic.name)
+            }
+            if (doc.profile?.clinicMemberships && Array.isArray(doc.profile.clinicMemberships)) {
+              for (const m of doc.profile.clinicMemberships) {
+                if (m?.clinic?.name) {
+                  affiliationsMap.get(doc.id)!.add(m.clinic.name)
+                }
+              }
+            }
+            if (doc.affiliatedClinics && Array.isArray(doc.affiliatedClinics)) {
+              for (const c of doc.affiliatedClinics) {
+                if (c?.name) {
+                  affiliationsMap.get(doc.id)!.add(c.name)
+                }
+              }
+            }
+          }
+
+          const uniqueList: DiscoveryDoctor[] = []
+          for (const [id, doc] of doctorMap.entries()) {
+            const extraClinics = Array.from(affiliationsMap.get(id) || [])
+            uniqueList.push(mapLiveDoctorToDiscovery(doc, extraClinics))
+          }
+
+          const sorted = uniqueList.sort(
             (a, b) =>
-              Number(Boolean(b.licenseVerified)) - Number(Boolean(a.licenseVerified)) ||
-              (b.yearsOfExperience || 0) - (a.yearsOfExperience || 0)
+              Number(Boolean(b.isVerified)) - Number(Boolean(a.isVerified)) ||
+              (b.experience ? 0 : 1)
           )
-          setLiveDoctors(sorted.map(mapLiveDoctorToDiscovery))
+          setLiveDoctors(sorted)
         }
       } catch (err: any) {
         if (!cancelled) {
@@ -121,18 +198,22 @@ export function LandingPage() {
   }, [directoryDoctors])
 
   const filteredDoctors = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
+    const q = debouncedSearch.trim().toLowerCase()
     return directoryDoctors.filter((d) => {
-      const matchesSpec = selectedSpecialty === "ALL" || d.specialty === selectedSpecialty
+      const matchesSpec =
+        selectedSpecialty === "ALL" ||
+        d.specialty.toLowerCase() === selectedSpecialty.toLowerCase()
+      const matchesClinic = d.clinics.some((c) => c.toLowerCase().includes(q))
       const matchesQuery =
         !q ||
         d.name.toLowerCase().includes(q) ||
         d.specialty.toLowerCase().includes(q) ||
         d.clinic.toLowerCase().includes(q) ||
+        matchesClinic ||
         (d.city ? d.city.toLowerCase().includes(q) : false)
       return matchesSpec && matchesQuery
     })
-  }, [directoryDoctors, searchQuery, selectedSpecialty])
+  }, [directoryDoctors, debouncedSearch, selectedSpecialty])
 
   const visibleDoctors = showAllDoctors ? filteredDoctors : filteredDoctors.slice(0, 4)
 
@@ -181,13 +262,17 @@ export function LandingPage() {
       {/* Editorial Navigation with Topline Identity */}
       <Navbar onOpenBooking={() => handleOpenBooking()} />
 
-      {/* 5-Step Interactive Booking Engine Modal */}
-      <InteractiveBookingModal
-        isOpen={isBookingModalOpen}
-        onClose={() => setIsBookingModalOpen(false)}
-        initialDoctorId={selectedDoctorId}
-        doctors={directoryDoctors}
-      />
+      {/* 5-Step Interactive Booking Engine Modal (Lazy-Loaded) */}
+      {isBookingModalOpen && (
+        <Suspense fallback={null}>
+          <InteractiveBookingModal
+            isOpen={isBookingModalOpen}
+            onClose={() => setIsBookingModalOpen(false)}
+            initialDoctorId={selectedDoctorId}
+            doctors={directoryDoctors}
+          />
+        </Suspense>
+      )}
 
       {/* ========================================================= */}
       {/* 1. HERO COMPOSITION MATCHING APPROVED SCREENSHOT */}
@@ -481,6 +566,10 @@ export function LandingPage() {
                         <img
                           src={doc.avatar}
                           alt={doc.name}
+                          width="72"
+                          height="72"
+                          loading="lazy"
+                          decoding="async"
                           className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl object-cover border border-[#ebe4da] shrink-0 group-hover:scale-[1.03] transition-transform duration-200"
                         />
                       ) : (
@@ -507,8 +596,8 @@ export function LandingPage() {
                         </p>
                         <p className="text-[11px] text-[#6e6059] truncate mt-0.5 flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-[#a28c7a] shrink-0" />
-                          <span className="truncate">
-                            {doc.clinic}
+                          <span className="truncate" title={doc.clinics.join(' · ')}>
+                            {doc.clinicDisplay}
                             {doc.city ? ` · ${doc.city}` : ""}
                           </span>
                         </p>

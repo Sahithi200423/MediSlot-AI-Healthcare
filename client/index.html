@@ -7,10 +7,14 @@
     <title>MediSlot — Smarter Appointments. Better Clinic Management.</title>
     <link rel="preload" as="font" type="font/ttf" crossorigin href="/fonts/InstrumentSerif-Regular.ttf" />
     <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/DMSans-Regular.woff2" />
-    <!-- Preconnect to Google Fonts -->
+    <!-- Preconnect & Asynchronous Non-Blocking Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'" />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" />
+    </noscript>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-teal-500 selection:text-white dark:bg-slate-950 dark:text-slate-100 min-h-screen">
     <div id="root"></div>
