@@ -132,6 +132,15 @@ function createSoftShadowTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(canvas);
 }
 
+const yieldToMain = () =>
+  new Promise<void>((resolve) => {
+    if (typeof window !== 'undefined' && 'scheduler' in window && (window as any).scheduler?.yield) {
+      (window as any).scheduler.yield().then(resolve);
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+
 export default function BioCellSculpture() {
   const hostRef = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState(true);
@@ -148,6 +157,15 @@ export default function BioCellSculpture() {
     let frame = 0;
     let lastFrameTime = 0;
     let initTimer: ReturnType<typeof setTimeout> | null = null;
+    let observer: ResizeObserver | null = null;
+    let intersectionObserver: IntersectionObserver | null = null;
+
+    let pointerDownHandler: ((e: PointerEvent) => void) | null = null;
+    let pointerMoveHandler: ((e: PointerEvent) => void) | null = null;
+    let pointerUpHandler: (() => void) | null = null;
+    let pointerLeaveHandler: (() => void) | null = null;
+    let motionChangeHandler: ((e: MediaQueryListEvent) => void) | null = null;
+    let visibilityChangeHandler: (() => void) | null = null;
 
     // Disposables tracking
     const geometriesToDispose: THREE.BufferGeometry[] = [];
@@ -187,6 +205,10 @@ export default function BioCellSculpture() {
       const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
       camera.position.set(0, 0, 7.7);
 
+      // Yield after initial WebGL context creation to avoid blocking main thread
+      await yieldToMain();
+      if (disposed) return;
+
       // Studio environment
       const environment = new RoomEnvironment();
       const generator = new THREE.PMREMGenerator(renderer);
@@ -196,11 +218,19 @@ export default function BioCellSculpture() {
       environment.dispose();
       generator.dispose();
 
+      // Yield after PMREM cubemap generation
+      await yieldToMain();
+      if (disposed) return;
+
       // Procedural textures
       const alabasterTexture = createAlabasterTexture();
       const goldTexture = createGoldTexture();
       const shadowTexture = createSoftShadowTexture();
       texturesToDispose.push(alabasterTexture, goldTexture, shadowTexture);
+
+      // Yield after procedural texture rasterization
+      await yieldToMain();
+      if (disposed) return;
 
       // Shadow plane
       const shadowGeo = new THREE.PlaneGeometry(7.2, 7.2);
@@ -261,6 +291,10 @@ export default function BioCellSculpture() {
       nucleusMesh.position.set(0.02, 0.01, 0.02);
       sculptureGroup.add(nucleusMesh);
 
+      // Yield after lighting and nucleus creation
+      await yieldToMain();
+      if (disposed) return;
+
       // 2. Off-Thread Computed Organic Cellular Membrane
       const geoData = await loadGeometryData();
       if (disposed) return;
@@ -288,6 +322,10 @@ export default function BioCellSculpture() {
       materialsToDispose.push(outerMembraneMaterial);
       const outerMesh = new THREE.Mesh(outerGeo, outerMembraneMaterial);
       sculptureGroup.add(outerMesh);
+
+      // Yield after outer cellular membrane creation
+      await yieldToMain();
+      if (disposed) return;
 
       // 3. Delicate Champagne-Gold Orbital Ring
       const ringGroup = new THREE.Group();
@@ -323,6 +361,10 @@ export default function BioCellSculpture() {
 
       sculptureGroup.rotation.set(0.12, -0.16, 0.03);
       scene.add(sculptureGroup);
+
+      // Yield before interaction and animation setup
+      await yieldToMain();
+      if (disposed) return;
 
       // 4. Interaction & Throttled Animation Loop
       let elapsed = 0;
@@ -506,10 +548,10 @@ export default function BioCellSculpture() {
         }
       };
 
-      const observer = new ResizeObserver(handleResize);
+      observer = new ResizeObserver(handleResize);
       observer.observe(host);
 
-      const intersectionObserver =
+      intersectionObserver =
         typeof IntersectionObserver !== 'undefined'
           ? new IntersectionObserver(
               (entries) => {
@@ -526,15 +568,22 @@ export default function BioCellSculpture() {
           : null;
       intersectionObserver?.observe(host);
 
-      host.addEventListener('pointerdown', onPointerDown);
-      host.addEventListener('pointermove', onPointerMove);
-      host.addEventListener('pointerup', onPointerUp);
-      host.addEventListener('pointercancel', onPointerUp);
-      host.addEventListener('pointerleave', onPointerLeave);
+      pointerDownHandler = onPointerDown;
+      pointerMoveHandler = onPointerMove;
+      pointerUpHandler = onPointerUp;
+      pointerLeaveHandler = onPointerLeave;
+      motionChangeHandler = onMotionChange;
+      visibilityChangeHandler = onVisibilityChange;
+
+      host.addEventListener('pointerdown', pointerDownHandler);
+      host.addEventListener('pointermove', pointerMoveHandler);
+      host.addEventListener('pointerup', pointerUpHandler);
+      host.addEventListener('pointercancel', pointerUpHandler);
+      host.addEventListener('pointerleave', pointerLeaveHandler);
       host.style.cursor = 'grab';
 
-      reducedMotion.addEventListener('change', onMotionChange);
-      document.addEventListener('visibilitychange', onVisibilityChange);
+      reducedMotion.addEventListener('change', motionChangeHandler);
+      document.addEventListener('visibilitychange', visibilityChangeHandler);
 
       handleResize();
       setIsReady(true);
@@ -546,40 +595,86 @@ export default function BioCellSculpture() {
       } else {
         renderScene(0);
       }
-
-      // Cleanup on unmount
-      return () => {
-        disposed = true;
-        if (initTimer) clearTimeout(initTimer);
-        if (frame !== 0) cancelAnimationFrame(frame);
-        observer.disconnect();
-        intersectionObserver?.disconnect();
-
-        host.removeEventListener('pointerdown', onPointerDown);
-        host.removeEventListener('pointermove', onPointerMove);
-        host.removeEventListener('pointerup', onPointerUp);
-        host.removeEventListener('pointercancel', onPointerUp);
-        host.removeEventListener('pointerleave', onPointerLeave);
-        reducedMotion.removeEventListener('change', onMotionChange);
-        document.removeEventListener('visibilitychange', onVisibilityChange);
-
-        geometriesToDispose.forEach((g) => g.dispose());
-        materialsToDispose.forEach((m) => m.dispose());
-        texturesToDispose.forEach((t) => t.dispose());
-        renderer?.dispose();
-        renderer?.domElement.remove();
-      };
     }
 
-    // Defer initialization slightly to let main thread complete critical hydration & paint
-    const startupTimer = setTimeout(() => {
+    let initStarted = false;
+    let idleCallbackId: number | null = null;
+    let fallbackTimerId: ReturnType<typeof setTimeout> | null = null;
+
+    const startInitialization = () => {
+      if (initStarted || disposed) return;
+      initStarted = true;
+      if (idleCallbackId !== null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleCallbackId);
+        idleCallbackId = null;
+      }
+      if (fallbackTimerId !== null) {
+        clearTimeout(fallbackTimerId);
+        fallbackTimerId = null;
+      }
+      cleanupInteractionListeners();
       init();
-    }, 80);
+    };
+
+    const onUserInteraction = () => {
+      startInitialization();
+    };
+
+    const cleanupInteractionListeners = () => {
+      if (host) {
+        host.removeEventListener('pointerenter', onUserInteraction);
+        host.removeEventListener('pointerdown', onUserInteraction);
+      }
+    };
+
+    if (host) {
+      host.addEventListener('pointerenter', onUserInteraction, { passive: true, once: true });
+      host.addEventListener('pointerdown', onUserInteraction, { passive: true, once: true });
+    }
+
+    // Defer initialization to browser idle period so it runs cleanly after critical render & hydration
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleCallbackId = (window as any).requestIdleCallback(
+        () => {
+          startInitialization();
+        },
+        { timeout: 2500 }
+      );
+    } else {
+      fallbackTimerId = setTimeout(() => {
+        startInitialization();
+      }, 1200);
+    }
 
     return () => {
       disposed = true;
-      clearTimeout(startupTimer);
+      cleanupInteractionListeners();
+      if (idleCallbackId !== null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleCallbackId);
+      }
+      if (fallbackTimerId !== null) {
+        clearTimeout(fallbackTimerId);
+      }
+      if (initTimer) clearTimeout(initTimer);
       if (frame !== 0) cancelAnimationFrame(frame);
+      observer?.disconnect();
+      intersectionObserver?.disconnect();
+
+      if (host) {
+        if (pointerDownHandler) host.removeEventListener('pointerdown', pointerDownHandler);
+        if (pointerMoveHandler) host.removeEventListener('pointermove', pointerMoveHandler);
+        if (pointerUpHandler) {
+          host.removeEventListener('pointerup', pointerUpHandler);
+          host.removeEventListener('pointercancel', pointerUpHandler);
+        }
+        if (pointerLeaveHandler) host.removeEventListener('pointerleave', pointerLeaveHandler);
+      }
+      if (motionChangeHandler) reducedMotion.removeEventListener('change', motionChangeHandler);
+      if (visibilityChangeHandler) document.removeEventListener('visibilitychange', visibilityChangeHandler);
+
+      geometriesToDispose.forEach((g) => g.dispose());
+      materialsToDispose.forEach((m) => m.dispose());
+      texturesToDispose.forEach((t) => t.dispose());
       renderer?.dispose();
       renderer?.domElement.remove();
     };
