@@ -39,6 +39,7 @@ import {
 } from "@/lib/motion"
 
 // Lazy-load the Three.js 3D Bio-Cellular Sculpture
+import { SculptureStaticFallback } from "@/components/3d/SculptureStaticFallback"
 const BioCellSculpture = lazy(() => import("@/components/3d/BioCellSculpture"))
 
 interface DiscoveryDoctor extends BookingPreviewDoctor {
@@ -92,6 +93,13 @@ function mapLiveDoctorToDiscovery(doc: Doctor, affiliatedClinics: string[] = [])
 }
 
 export function LandingPage() {
+  const [isDesktop, setIsDesktop] = useState(false)
+  useEffect(() => {
+    setIsDesktop(window.innerWidth >= 768)
+    const handleResize = () => setIsDesktop(window.innerWidth >= 768)
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [selectedSpecialty, setSelectedSpecialty] = useState("ALL")
@@ -283,28 +291,17 @@ export function LandingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center min-h-[460px]">
           
           {/* Left Hero Column: Headline, Bio, and Call to Action */}
-          <motion.div
-            variants={staggerContainerVariants}
-            initial="hidden"
-            animate="visible"
-            className="lg:col-span-6 flex flex-col justify-center space-y-6 z-10"
-          >
-            <motion.h1
-              variants={fadeUpVariants}
-              className="font-editorial-serif text-5xl sm:text-6xl lg:text-[4.2rem] font-normal tracking-tight leading-[1.08] text-[#1e1815]"
-            >
+          <div className="lg:col-span-6 flex flex-col justify-center space-y-6 z-10">
+            <h1 className="font-editorial-serif text-5xl sm:text-6xl lg:text-[4.2rem] font-normal tracking-tight leading-[1.08] text-[#1e1815]">
               ‘Where clinical excellence<br />
               meets human dignity.’
-            </motion.h1>
+            </h1>
 
-            <motion.p
-              variants={fadeUpVariants}
-              className="text-base sm:text-lg leading-relaxed text-[#4a3e39] max-w-lg font-editorial-sans"
-            >
+            <p className="text-base sm:text-lg leading-relaxed text-[#4a3e39] max-w-lg font-editorial-sans">
               MediSlot is an advanced healthcare coordination platform providing real-time doctor scheduling, encrypted clinical records, and physician-supervised AI assistance.
-            </motion.p>
+            </p>
 
-            <motion.div variants={fadeUpVariants}>
+            <div>
               <button
                 type="button"
                 onClick={() => handleOpenBooking()}
@@ -312,27 +309,19 @@ export function LandingPage() {
               >
                 Book Consultation
               </button>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
 
-          {/* Right Hero Column: Interactive Three.js Healthcare Sculpture */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.72, delay: 0.12, ease: EDITORIAL_EASE }}
-            className="lg:col-span-6 w-full h-[360px] sm:h-[440px] lg:h-[480px] relative flex items-center justify-center"
-          >
-            <Suspense 
-              fallback={
-                <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-[#8b7566]">
-                  <div className="w-10 h-10 rounded-full border-2 border-[#cb6440] border-t-transparent animate-spin" />
-                  <span className="text-xs uppercase tracking-wider font-editorial-sans">Rendering biological model...</span>
-                </div>
-              }
-            >
-              <BioCellSculpture />
-            </Suspense>
-          </motion.div>
+          {/* Right Hero Column: Interactive Three.js Healthcare Sculpture on Desktop, High-Fidelity Static Sculpture on Mobile */}
+          <div className="lg:col-span-6 w-full h-[360px] sm:h-[440px] lg:h-[480px] relative flex items-center justify-center">
+            {isDesktop ? (
+              <Suspense fallback={<SculptureStaticFallback />}>
+                <BioCellSculpture />
+              </Suspense>
+            ) : (
+              <SculptureStaticFallback />
+            )}
+          </div>
 
         </div>
 
