@@ -5,13 +5,28 @@ import { Menu, X, ArrowRight, LayoutDashboard, LogOut, ChevronDown } from "lucid
 import { useAuth } from "@/context/AuthContext"
 import { EDITORIAL_EASE } from "@/lib/motion"
 
-export function Navbar({ onOpenBooking }: { onOpenBooking?: () => void }) {
+export function Navbar({
+  onOpenBooking,
+  onPrefetchBooking,
+}: {
+  onOpenBooking?: () => void
+  onPrefetchBooking?: () => void
+}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const { user, logout } = useAuth()
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 12)
+    let ticking = false
+    const handleScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          setIsScrolled(window.scrollY > 12)
+          ticking = false
+        })
+        ticking = true
+      }
+    }
     handleScroll()
     window.addEventListener("scroll", handleScroll, { passive: true })
     return () => window.removeEventListener("scroll", handleScroll)
@@ -37,10 +52,10 @@ export function Navbar({ onOpenBooking }: { onOpenBooking?: () => void }) {
 
   return (
     <header
-      className={`sticky top-0 z-40 w-full border-b font-editorial-sans transition-all duration-300 ${
+      className={`sticky top-0 z-40 w-full border-b font-editorial-sans transition-all duration-200 ${
         isScrolled
-          ? "border-[#e4dcd0] bg-[#fbf9f5]/95 backdrop-blur-md shadow-[0_6px_24px_-14px_rgba(30,24,21,0.16)]"
-          : "border-[#eae4da] bg-[#fbf9f5]/88 backdrop-blur-sm"
+          ? "border-[#e4dcd0] bg-[#fbf9f5]/98 shadow-[0_4px_20px_-10px_rgba(30,24,21,0.12)]"
+          : "border-[#eae4da] bg-[#fbf9f5]"
       }`}
     >
       <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-14">
@@ -113,6 +128,8 @@ export function Navbar({ onOpenBooking }: { onOpenBooking?: () => void }) {
               <button
                 type="button"
                 onClick={onOpenBooking}
+                onPointerEnter={onPrefetchBooking}
+                onFocus={onPrefetchBooking}
                 className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-6 py-2.5 text-sm font-medium transition-all duration-200 shadow-sm shadow-[#cb6440]/15 hover:shadow-md hover:shadow-[#cb6440]/25 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] cursor-pointer shrink-0 whitespace-nowrap"
               >
                 Book Consultation
@@ -136,16 +153,16 @@ export function Navbar({ onOpenBooking }: { onOpenBooking?: () => void }) {
         </div>
       </div>
 
-      {/* Animated Mobile Dropdown Drawer */}
+      {/* Animated Mobile Dropdown Drawer (GPU-Composited Transform & Opacity) */}
       <AnimatePresence initial={false}>
         {mobileMenuOpen && (
           <motion.div
             id="mobile-nav-drawer"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.26, ease: EDITORIAL_EASE }}
-            className="sm:hidden overflow-hidden border-t border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210]"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18, ease: EDITORIAL_EASE }}
+            className="sm:hidden border-t border-[#dcd3c6] dark:border-[#362f2a] bg-[#fbf9f5] dark:bg-[#141210] shadow-md origin-top"
           >
             <div className="px-6 py-6 space-y-5">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#4a6356]/12 text-[#4a6356] text-[10px] font-semibold tracking-wider uppercase">

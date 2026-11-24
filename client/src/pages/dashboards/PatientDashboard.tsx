@@ -18,6 +18,7 @@ import {
   type MedicalRecord,
   type Prescription
 } from "@/lib/api"
+import { processDoctorDirectory } from "@/lib/doctorDirectory"
 import { toast } from "sonner"
 import { AiConsentBanner } from "@/components/ai/AiConsentBanner"
 
@@ -173,7 +174,7 @@ export function PatientDashboard() {
         api.getDoctors(selectedSpecialty === "all" ? undefined : selectedSpecialty, searchQuery || undefined),
         api.getClinics(),
       ])
-      setDoctors(docs)
+      setDoctors(processDoctorDirectory(docs))
       setClinics(cls)
     } catch (err: any) {
       console.error("Failed to load doctors:", err)

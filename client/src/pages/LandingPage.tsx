@@ -1,26 +1,57 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from "react"
+import { useState, useEffect, useMemo, useDeferredValue, lazy, Suspense } from "react"
 import { motion } from "framer-motion"
 import {
   Search,
-  ShieldCheck,
-  MapPin,
   RotateCcw,
 } from "lucide-react"
 import { Navbar } from "@/components/layout/Navbar"
-import type { BookingPreviewDoctor } from "@/components/booking/InteractiveBookingModal"
+import {
+  DoctorDirectoryCard,
+  type DiscoveryDoctor,
+} from "@/components/landing/DoctorDirectoryCard"
+import { processDoctorDirectory } from "@/lib/doctorDirectory"
 
 // Lazy-load below-the-fold content to slash initial client DOM creation task
 const BelowTheFoldLanding = lazy(() => import("@/components/landing/BelowTheFoldLanding"))
 
-// Lazy-load interactive booking wizard to reduce initial critical bundle size
+// Intent-based prefetching for 5-Step Interactive Booking Engine Modal
+let bookingModalPromise: Promise<typeof import("@/components/booking/InteractiveBookingModal")> | null = null
+export function prefetchBookingModal() {
+  if (!bookingModalPromise) {
+    bookingModalPromise = import("@/components/booking/InteractiveBookingModal")
+  }
+  return bookingModalPromise
+}
+
 const InteractiveBookingModal = lazy(() =>
-  import("@/components/booking/InteractiveBookingModal").then((m) => ({
+  prefetchBookingModal().then((m) => ({
     default: m.InteractiveBookingModal,
   }))
 )
+
+function BookingModalSkeleton() {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1e1815]/50 backdrop-blur-xs font-editorial-sans"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Loading Booking Wizard"
+    >
+      <div className="relative w-full max-w-xl rounded-3xl bg-[#fbf9f5] border border-[#e8e2d8] shadow-2xl p-6 sm:p-8 space-y-4 animate-pulse">
+        <div className="h-6 w-1/2 bg-[#e8e2d8] rounded-md" />
+        <div className="h-4 w-3/4 bg-[#ece6dd] rounded-md" />
+        <div className="h-32 bg-[#f0eae1] rounded-2xl" />
+        <div className="flex justify-between items-center pt-4">
+          <div className="h-9 w-24 bg-[#e8e2d8] rounded-full" />
+          <div className="h-9 w-32 bg-[#cb6440]/30 rounded-full" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 import { Skeleton } from "@/components/ui/Skeleton"
 import { api, type Doctor } from "@/lib/api"
-import { formatINR } from "@/lib/currency"
 import {
   VIEWPORT_ONCE,
   fadeUpVariants,
@@ -29,16 +60,6 @@ import {
 // Lazy-load the Three.js 3D Bio-Cellular Sculpture
 import { SculptureStaticFallback } from "@/components/3d/SculptureStaticFallback"
 const BioCellSculpture = lazy(() => import("@/components/3d/BioCellSculpture"))
-
-interface DiscoveryDoctor extends BookingPreviewDoctor {
-  experience: string
-  nextAvailable: string
-  city?: string
-  isAccepting: boolean
-  clinics: string[]
-  clinicDisplay: string
-  affiliatedCount: number
-}
 
 function mapLiveDoctorToDiscovery(doc: Doctor, affiliatedClinics: string[] = []): DiscoveryDoctor {
   const first = doc.profile?.firstName?.trim() || "Specialist"
@@ -84,10 +105,20 @@ export function LandingPage() {
   const [isDesktop, setIsDesktop] = useState(false)
   useEffect(() => {
     setIsDesktop(window.innerWidth >= 768)
-    const handleResize = () => setIsDesktop(window.innerWidth >= 768)
+    let ticking = false
+    const handleResize = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          setIsDesktop(window.innerWidth >= 768)
+          ticking = false
+        })
+        ticking = true
+      }
+    }
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
   }, [])
+
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [selectedSpecialty, setSelectedSpecialty] = useState("ALL")
@@ -99,13 +130,30 @@ export function LandingPage() {
     }, 200)
     return () => clearTimeout(timer)
   }, [searchQuery])
+
+  // Deferred value ensures non-blocking UI response during rapid typing
+  const deferredSearch = useDeferredValue(debouncedSearch)
+
   const [showAllDoctors, setShowAllDoctors] = useState(false)
   const [liveDoctors, setLiveDoctors] = useState<DiscoveryDoctor[]>([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
   const [directoryError, setDirectoryError] = useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = useState(0)
+
+  // Booking modal lifecycle and prefetching state
+  const [hasOpenedBookingModal, setHasOpenedBookingModal] = useState(false)
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | undefined>(undefined)
+
+  // Warm booking wizard chunk during idle period so first click is instantaneous
+  useEffect(() => {
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const handle = (window as any).requestIdleCallback(() => {
+        prefetchBookingModal()
+      })
+      return () => (window as any).cancelIdleCallback(handle)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -113,52 +161,14 @@ export function LandingPage() {
       setLoadingDoctors(true)
       setDirectoryError(null)
       try {
-        const doctors = await api.getDoctors()
-        if (!cancelled && Array.isArray(doctors)) {
-          // Deduplicate and aggregate strictly by unique doctor ID
-          // If a doctor practices at multiple clinics, consolidate affiliations into one profile
-          const doctorMap = new Map<string, Doctor>()
-          const affiliationsMap = new Map<string, Set<string>>()
-
-          for (const doc of doctors) {
-            if (!doc || !doc.id) continue
-
-            // Filter out confirmed test suite artifacts from public browsing
-            const email = doc.profile?.email || ""
-            const isSynthetic =
-              /_\d{10,14}@/.test(email) ||
-              /^(ai\.doc\.|sec\.doc[ab]\.|editorial\.doc\.|audit\.doc\.)/i.test(email)
-            if (isSynthetic) continue
-
-            if (!doctorMap.has(doc.id)) {
-              doctorMap.set(doc.id, doc)
-              affiliationsMap.set(doc.id, new Set())
-            }
-
-            if (doc.clinic?.name) {
-              affiliationsMap.get(doc.id)!.add(doc.clinic.name)
-            }
-            if (doc.profile?.clinicMemberships && Array.isArray(doc.profile.clinicMemberships)) {
-              for (const m of doc.profile.clinicMemberships) {
-                if (m?.clinic?.name) {
-                  affiliationsMap.get(doc.id)!.add(m.clinic.name)
-                }
-              }
-            }
-            if (doc.affiliatedClinics && Array.isArray(doc.affiliatedClinics)) {
-              for (const c of doc.affiliatedClinics) {
-                if (c?.name) {
-                  affiliationsMap.get(doc.id)!.add(c.name)
-                }
-              }
-            }
-          }
-
-          const uniqueList: DiscoveryDoctor[] = []
-          for (const [id, doc] of doctorMap.entries()) {
-            const extraClinics = Array.from(affiliationsMap.get(id) || [])
-            uniqueList.push(mapLiveDoctorToDiscovery(doc, extraClinics))
-          }
+        const rawDoctors = await api.getDoctors()
+        if (!cancelled && Array.isArray(rawDoctors)) {
+          // Process directory: presentation-layer synthetic filter + stable identity deduplication
+          const processed = processDoctorDirectory(rawDoctors)
+          const uniqueList: DiscoveryDoctor[] = processed.map((doc) => {
+            const extraClinics = (doc.affiliatedClinics || []).map((c) => c.name).filter(Boolean)
+            return mapLiveDoctorToDiscovery(doc, extraClinics)
+          })
 
           const sorted = uniqueList.sort(
             (a, b) =>
@@ -193,7 +203,7 @@ export function LandingPage() {
   }, [directoryDoctors])
 
   const filteredDoctors = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase()
+    const q = deferredSearch.trim().toLowerCase()
     return directoryDoctors.filter((d) => {
       const matchesSpec =
         selectedSpecialty === "ALL" ||
@@ -208,12 +218,13 @@ export function LandingPage() {
         (d.city ? d.city.toLowerCase().includes(q) : false)
       return matchesSpec && matchesQuery
     })
-  }, [directoryDoctors, debouncedSearch, selectedSpecialty])
+  }, [directoryDoctors, deferredSearch, selectedSpecialty])
 
   const visibleDoctors = showAllDoctors ? filteredDoctors : filteredDoctors.slice(0, 4)
 
   const handleOpenBooking = (docId?: string) => {
     setSelectedDoctorId(docId)
+    setHasOpenedBookingModal(true)
     setIsBookingModalOpen(true)
   }
 
@@ -221,11 +232,11 @@ export function LandingPage() {
     <div className="min-h-screen flex flex-col bg-[#fbf9f5] dark:bg-[#141210] text-[#542f28] dark:text-[#f5f1e9] font-editorial-sans transition-colors selection:bg-[#ede4d5] selection:text-[#2a201e]">
       
       {/* Editorial Navigation with Topline Identity */}
-      <Navbar onOpenBooking={() => handleOpenBooking()} />
+      <Navbar onOpenBooking={() => handleOpenBooking()} onPrefetchBooking={prefetchBookingModal} />
 
-      {/* 5-Step Interactive Booking Engine Modal (Lazy-Loaded) */}
-      {isBookingModalOpen && (
-        <Suspense fallback={null}>
+      {/* 5-Step Interactive Booking Engine Modal (Lazy-Loaded with Intent Prefetch & Fallback) */}
+      {hasOpenedBookingModal && (
+        <Suspense fallback={<BookingModalSkeleton />}>
           <InteractiveBookingModal
             isOpen={isBookingModalOpen}
             onClose={() => setIsBookingModalOpen(false)}
@@ -258,6 +269,8 @@ export function LandingPage() {
               <button
                 type="button"
                 onClick={() => handleOpenBooking()}
+                onPointerEnter={prefetchBookingModal}
+                onFocus={prefetchBookingModal}
                 className="rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-8 py-3.5 text-sm sm:text-base font-medium shadow-md shadow-[#cb6440]/15 hover:shadow-lg hover:shadow-[#cb6440]/25 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 cursor-pointer"
               >
                 Book Consultation
@@ -498,66 +511,12 @@ export function LandingPage() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {visibleDoctors.map((doc) => (
-                    <button
+                    <DoctorDirectoryCard
                       key={doc.id}
-                      type="button"
-                      onClick={() => handleOpenBooking(doc.id)}
-                      className="text-left bg-white rounded-2xl border border-[#e8e2d8] p-4 flex items-center gap-4 shadow-xs hover:shadow-md hover:border-[#cb6440]/55 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group"
-                    >
-                      {doc.avatar ? (
-                        <img
-                          src={doc.avatar}
-                          alt={doc.name}
-                          width="72"
-                          height="72"
-                          loading="lazy"
-                          decoding="async"
-                          className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl object-cover border border-[#ebe4da] shrink-0 group-hover:scale-[1.03] transition-transform duration-200"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl bg-gradient-to-br from-[#4a6356]/15 to-[#cb6440]/12 border border-[#e8e2d8] text-[#4a6356] flex items-center justify-center font-editorial-serif text-2xl shrink-0 group-hover:scale-[1.03] transition-transform duration-200">
-                          {doc.initials}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <h3 className="text-sm font-bold text-[#1e1815] truncate group-hover:text-[#cb6440] transition-colors">
-                            {doc.name}
-                          </h3>
-                          {doc.isVerified && (
-                            <span
-                              title="Verified Clinician"
-                              className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#4a6356] bg-[#4a6356]/10 px-1.5 py-0.5 rounded-full shrink-0"
-                            >
-                              <ShieldCheck className="w-3 h-3" /> Verified
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-[#cb6440] font-medium truncate mt-0.5">
-                          {doc.specialty}
-                        </p>
-                        <p className="text-[11px] text-[#6e6059] truncate mt-0.5 flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-[#a28c7a] shrink-0" />
-                          <span className="truncate" title={doc.clinics.join(' · ')}>
-                            {doc.clinicDisplay}
-                            {doc.city ? ` · ${doc.city}` : ""}
-                          </span>
-                        </p>
-                        <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-[#f2ede4]">
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#4a6b5d] truncate">
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                doc.isAccepting ? "bg-[#4a6b5d]" : "bg-[#c5a880]"
-                              }`}
-                            />
-                            <span className="truncate">{doc.nextAvailable}</span>
-                          </span>
-                          <span className="shrink-0 text-xs font-bold text-[#1e1815] bg-[#f5f1e9] px-2.5 py-0.5 rounded-full">
-                            {formatINR(doc.fee)}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
+                      doctor={doc}
+                      onSelect={(id) => handleOpenBooking(id)}
+                      onPrefetchBooking={prefetchBookingModal}
+                    />
                   ))}
                 </div>
 
