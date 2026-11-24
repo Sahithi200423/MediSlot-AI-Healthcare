@@ -227,11 +227,21 @@ export function LandingPage() {
 
   const visibleDoctors = showAllDoctors ? filteredDoctors : filteredDoctors.slice(0, 4)
 
-  const handleOpenBooking = useCallback((docId?: string) => {
-    setSelectedDoctorId(docId)
-    setHasOpenedBookingModal(true)
-    setIsBookingModalOpen(true)
-  }, [])
+  const handleOpenBooking = useCallback(
+    (docId?: string) => {
+      if (directoryError || liveDoctors.length === 0) {
+        toast.info("Live Appointments Temporarily Paused", {
+          description: "The live physician directory is currently offline. Real-time booking will resume shortly.",
+        })
+        return
+      }
+
+      setSelectedDoctorId(docId)
+      setHasOpenedBookingModal(true)
+      setIsBookingModalOpen(true)
+    },
+    [directoryError, liveDoctors.length]
+  )
 
   const handleDoctorSelect = useCallback(
     (doctorId: string) => {
@@ -365,6 +375,8 @@ export function LandingPage() {
             <p className="col-span-2 text-[10px] text-[#8c7e77] leading-tight italic pt-1">
               {liveDoctors.length > 0
                 ? `* Showcase network metrics · ${liveDoctors.length} physician${liveDoctors.length > 1 ? "s" : ""} loaded live from MediSlot directory`
+                : directoryError
+                ? "* Showcase network metrics · Live directory offline, displaying department showcase profiles"
                 : "* Showcase network metrics · Connected to live MediSlot physician directory"}
             </p>
           </div>
@@ -376,11 +388,7 @@ export function LandingPage() {
               onSubmit={(e) => {
                 e.preventDefault()
                 const liveMatch = filteredDoctors.find((d) => !d.isDemo)
-                if (liveMatch) {
-                  handleOpenBooking(liveMatch.id)
-                } else {
-                  handleOpenBooking()
-                }
+                handleOpenBooking(liveMatch?.id)
               }}
               className="w-full bg-white rounded-full border border-[#e4ded5] focus-within:border-[#cb6440] focus-within:ring-2 focus-within:ring-[#cb6440]/15 shadow-xs px-4 sm:px-5 py-2 flex items-center gap-3 transition-all"
             >
@@ -439,8 +447,10 @@ export function LandingPage() {
               <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#6e6059]">
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    directoryError
-                      ? "bg-rose-500"
+                    loadingDoctors
+                      ? "bg-[#c5a880]"
+                      : directoryError
+                      ? "bg-amber-500"
                       : liveDoctors.length > 0
                       ? "bg-[#4a6356]"
                       : "bg-[#c5a880]"
@@ -448,11 +458,12 @@ export function LandingPage() {
                 />
                 {loadingDoctors
                   ? "Loading live directory..."
-                  : directoryError
-                  ? "Directory temporarily unreachable"
                   : (() => {
                       const liveFilteredCount = filteredDoctors.filter((d) => !d.isDemo).length
                       const demoFilteredCount = filteredDoctors.filter((d) => d.isDemo).length
+                      if (directoryError) {
+                        return `${demoFilteredCount} Department Showcase${demoFilteredCount > 1 ? "s" : ""} · Live Directory Offline`
+                      }
                       if (liveFilteredCount > 0 && demoFilteredCount > 0) {
                         return `${liveFilteredCount} Live Specialist${liveFilteredCount > 1 ? "s" : ""} · ${demoFilteredCount} Department Showcase${demoFilteredCount > 1 ? "s" : ""}`
                       }
@@ -467,7 +478,7 @@ export function LandingPage() {
               </span>
             </div>
 
-            {/* Doctor Cards Grid: Loading Skeletons / Error Retry / Empty State / Live Doctor Cards */}
+            {/* Doctor Cards Grid: Loading Skeletons / Offline Banner + Cards / Empty State */}
             {loadingDoctors ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="Loading physicians">
                 {[0, 1, 2, 3].map((idx) => (
@@ -488,88 +499,97 @@ export function LandingPage() {
                   </div>
                 ))}
               </div>
-            ) : directoryError ? (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl border border-[#e8e2d8] p-8 text-center space-y-3"
-              >
-                <div className="w-11 h-11 rounded-full bg-[#fbf5f2] text-[#cb6440] flex items-center justify-center mx-auto">
-                  <RotateCcw className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-editorial-serif text-xl text-[#1e1815]">
-                    Live physician directory is waking up
-                  </h3>
-                  <p className="text-xs text-[#6e6059] mt-1 max-w-md mx-auto">
-                    {directoryError} Click retry to load verified doctors directly from MediSlot.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setReloadNonce((n) => n + 1)}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-5 py-2 text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> Retry Live Directory
-                </button>
-              </motion.div>
-            ) : filteredDoctors.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl border border-dashed border-[#dcd3c6] p-8 text-center space-y-3"
-              >
-                <div className="w-11 h-11 rounded-full bg-[#f5f1e9] text-[#cb6440] flex items-center justify-center mx-auto">
-                  <Search className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-editorial-serif text-xl text-[#1e1815]">
-                    No matching physicians found
-                  </h3>
-                  <p className="text-xs text-[#6e6059] mt-1 max-w-md mx-auto">
-                    We could not find specialists matching{" "}
-                    {searchQuery ? <strong className="text-[#1e1815]">"{searchQuery}"</strong> : "your current filter"}
-                    {selectedSpecialty !== "ALL" ? ` in ${selectedSpecialty}` : ""}. Try broadening your search or clearing filters.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery("")
-                    setSelectedSpecialty("ALL")
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-2 text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> Reset Search & Filters
-                </button>
-              </motion.div>
             ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {visibleDoctors.map((doc) => (
-                    <DoctorDirectoryCard
-                      key={doc.id}
-                      doctor={doc}
-                      onSelect={handleDoctorSelect}
-                      onPrefetchBooking={doc.isDemo ? undefined : prefetchBookingModal}
-                    />
-                  ))}
-                </div>
-
-                {filteredDoctors.length > 4 && (
-                  <div className="flex justify-center pt-1">
+              <div className="space-y-4">
+                {/* Informative Offline Warning Banner with Live Retry */}
+                {directoryError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-2xl border border-[#ecd9c6] bg-[#fdf9f4] p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left shadow-xs"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#f7ede2] text-[#cb6440] flex items-center justify-center shrink-0 mt-0.5">
+                        <RotateCcw className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-bold text-[#1e1815]">
+                          Live physician directory is temporarily offline
+                        </h4>
+                        <p className="text-[11px] sm:text-xs text-[#6e6059] mt-0.5 max-w-xl">
+                          Showing department showcase profiles below. Real-time physician availability and appointments are temporarily paused.
+                        </p>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setShowAllDoctors((prev) => !prev)}
-                      className="rounded-full border border-[#dcd3c6] bg-white hover:bg-[#f5f1e9] hover:border-[#cb6440]/50 px-5 py-1.5 text-xs font-semibold text-[#2a201e] transition-colors cursor-pointer"
+                      onClick={() => setReloadNonce((n) => n + 1)}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer shrink-0 self-end sm:self-auto active:scale-[0.98]"
                     >
-                      {showAllDoctors
-                        ? "Show fewer specialists"
-                        : `View all ${filteredDoctors.length} specialists`}
+                      <RotateCcw className="w-3.5 h-3.5" /> Retry Live Directory
                     </button>
-                  </div>
+                  </motion.div>
                 )}
-              </>
+
+                {filteredDoctors.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-2xl border border-dashed border-[#dcd3c6] p-8 text-center space-y-3"
+                  >
+                    <div className="w-11 h-11 rounded-full bg-[#f5f1e9] text-[#cb6440] flex items-center justify-center mx-auto">
+                      <Search className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-editorial-serif text-xl text-[#1e1815]">
+                        No matching physicians found
+                      </h3>
+                      <p className="text-xs text-[#6e6059] mt-1 max-w-md mx-auto">
+                        We could not find specialists matching{" "}
+                        {searchQuery ? <strong className="text-[#1e1815]">"{searchQuery}"</strong> : "your current filter"}
+                        {selectedSpecialty !== "ALL" ? ` in ${selectedSpecialty}` : ""}. Try broadening your search or clearing filters.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery("")
+                        setSelectedSpecialty("ALL")
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#cb6440] hover:bg-[#b85633] text-white px-4 py-2 text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> Reset Search & Filters
+                    </button>
+                  </motion.div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {visibleDoctors.map((doc) => (
+                        <DoctorDirectoryCard
+                          key={doc.id}
+                          doctor={doc}
+                          onSelect={handleDoctorSelect}
+                          onPrefetchBooking={doc.isDemo ? undefined : prefetchBookingModal}
+                        />
+                      ))}
+                    </div>
+
+                    {filteredDoctors.length > 4 && (
+                      <div className="flex justify-center pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowAllDoctors((prev) => !prev)}
+                          className="rounded-full border border-[#dcd3c6] bg-white hover:bg-[#f5f1e9] hover:border-[#cb6440]/50 px-5 py-1.5 text-xs font-semibold text-[#2a201e] transition-colors cursor-pointer"
+                        >
+                          {showAllDoctors
+                            ? "Show fewer specialists"
+                            : `View all ${filteredDoctors.length} specialists`}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             )}
 
           </div>
