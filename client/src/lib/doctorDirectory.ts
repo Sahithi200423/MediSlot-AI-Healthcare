@@ -1,4 +1,4 @@
-import type { Doctor } from '@/lib/api'
+import type { Doctor, Clinic } from '@/lib/api'
 
 /**
  * Identifies confirmed automated test suite artifact accounts at the presentation layer.
@@ -10,7 +10,7 @@ export function isSyntheticDoctorAccount(doc: Doctor): boolean {
   const email = (doc.profile?.email || '').trim().toLowerCase()
   if (email) {
     if (
-      /^(p\d+_doc_|ai\.doc\.|sec\.doc[ab]\.|editorial\.doc\.|audit\.doc\.|doctor_\d{10,14}@|doctortest\.)/i.test(email) ||
+      /^(p\d+_doc_|ai\.doc\.|sec\.doc[\w.]*|editorial\.doc\.|audit\.doc\.|doctor_\d{10,14}@|doctortest\.)/i.test(email) ||
       /_\d{10,14}@/i.test(email)
     ) {
       return true
@@ -28,31 +28,91 @@ export function isSyntheticDoctorAccount(doc: Doctor): boolean {
 }
 
 /**
- * Returns a stable unique identity key for a doctor.
- * Uses verified account credentials (email / profile id) when available,
- * falling back to doctor record ID.
+ * Returns a stable unique identity key for a doctor record.
  *
- * CRITICAL SAFETY REQUIREMENT:
- * Does NOT collapse legitimate doctors who happen to share the same name and specialty
- * if their verified accounts/IDs are distinct.
+ * IDENTITY RULES:
+ * 1. Doctor.id is the sole primary identity key for valid persisted doctor records.
+ * 2. Different doctor IDs are NEVER merged using email, profile ID, license number,
+ *    name, or specialty.
+ * 3. If doc.id is missing or empty, do not fall back to email or profile ID.
+ *    Returns an empty string, excluding the invalid record from deduplication mapping.
+ * 4. Multi-clinic affiliations for the doctor are preserved through existing clinic
+ *    memberships and affiliatedClinics relationships.
  */
 export function getDoctorStableIdentity(doc: Doctor): string {
-  const email = (doc.profile?.email || '').trim().toLowerCase()
-  if (email) {
-    return `email:${email}`
-  }
-  if (doc.profile?.id) {
-    return `profile:${doc.profile.id}`
-  }
-  return `doc:${doc.id}`
+  if (!doc) return ''
+  const docId = (doc.id || '').trim()
+  if (!docId) return ''
+  return `doc:${docId}`
 }
 
-type ClinicObj = {
+export type ClinicSummary = {
   id: string
   name: string
   city: string
   state: string
   address: string
+}
+
+/**
+ * Identifies confirmed automated test suite synthetic clinics.
+ * Specifically targets timestamped test artifacts (e.g., "... 1793088858001", "... 966383", "P4 Metro Cardiology 1793092243093")
+ * while strictly preserving legitimate clinics even if they are unverified.
+ */
+export function isSyntheticClinic(clinic: Clinic): boolean {
+  if (!clinic) return false
+
+  const name = (clinic.name || '').trim()
+  const slug = (clinic.slug || '').trim()
+  const email = (clinic.email || '').trim().toLowerCase()
+
+  // Match synthetic clinics created with timestamp or test-suite numeric suffixes
+  if (
+    /\s\d{6,14}$/.test(name) ||
+    /-\d{6,14}$/.test(slug) ||
+    /^(p\d+_|test_clinic)/i.test(slug) ||
+    /^(ai\.clinic\.|sec\.clinic|audit\.clinic)/i.test(email)
+  ) {
+    return true
+  }
+
+  return false
+}
+
+/**
+ * Formats doctor clinics consistently across all directory surfaces.
+ */
+export function formatDoctorClinics(doc: Doctor): {
+  primaryClinic: string
+  affiliatedCount: number
+  clinicDisplay: string
+  allClinics: string[]
+} {
+  const clinicSet = new Set<string>()
+  if (doc.clinic?.name) clinicSet.add(doc.clinic.name.trim())
+
+  if (doc.affiliatedClinics && Array.isArray(doc.affiliatedClinics)) {
+    for (const c of doc.affiliatedClinics) {
+      const name = (c as any)?.name || (typeof c === 'string' ? c : '')
+      if (typeof name === 'string' && name.trim()) {
+        clinicSet.add(name.trim())
+      }
+    }
+  }
+
+  const allClinics = Array.from(clinicSet)
+  const primaryClinic = doc.clinic?.name?.trim() || allClinics[0] || 'MediSlot Partner Clinic'
+  const affiliatedCount = Math.max(0, allClinics.length - 1)
+  const clinicDisplay = affiliatedCount > 0
+    ? `${primaryClinic} (+${affiliatedCount} affiliated clinic${affiliatedCount > 1 ? 's' : ''})`
+    : primaryClinic
+
+  return {
+    primaryClinic,
+    affiliatedCount,
+    clinicDisplay,
+    allClinics,
+  }
 }
 
 /**
@@ -63,10 +123,10 @@ export function processDoctorDirectory(rawDoctors: Doctor[]): Doctor[] {
   if (!Array.isArray(rawDoctors)) return []
 
   const doctorMap = new Map<string, Doctor>()
-  const affiliationsMap = new Map<string, Map<string, ClinicObj>>()
+  const affiliationsMap = new Map<string, Map<string, ClinicSummary>>()
 
   for (const doc of rawDoctors) {
-    if (!doc || !doc.id) continue
+    if (!doc || !doc.id || !doc.id.trim()) continue
 
     // 1. Filter confirmed synthetic test suite accounts at presentation layer only
     if (isSyntheticDoctorAccount(doc)) {
@@ -75,10 +135,11 @@ export function processDoctorDirectory(rawDoctors: Doctor[]): Doctor[] {
 
     // 2. Resolve stable identity
     const identityKey = getDoctorStableIdentity(doc)
+    if (!identityKey) continue
 
     if (!doctorMap.has(identityKey)) {
       doctorMap.set(identityKey, doc)
-      affiliationsMap.set(identityKey, new Map<string, ClinicObj>())
+      affiliationsMap.set(identityKey, new Map<string, ClinicSummary>())
     } else {
       // If we already have this identity, prefer the record that has a populated profile/clinic
       const existing = doctorMap.get(identityKey)!
@@ -131,4 +192,38 @@ export function processDoctorDirectory(rawDoctors: Doctor[]): Doctor[] {
   }
 
   return result
+}
+
+/**
+ * Filters out synthetic test clinics while strictly preserving legitimate
+ * clinics (both verified and unverified). Deduplicates identical clinic facilities.
+ */
+export function processClinicDirectory(rawClinics: Clinic[]): Clinic[] {
+  if (!Array.isArray(rawClinics)) return []
+
+  const clinicMap = new Map<string, Clinic>()
+
+  for (const clinic of rawClinics) {
+    if (!clinic || !clinic.id) continue
+
+    // Filter confirmed synthetic test artifacts
+    if (isSyntheticClinic(clinic)) {
+      continue
+    }
+
+    // Deduplicate by slug or trimmed name+city
+    const dedupKey = clinic.slug || `${clinic.name.trim().toLowerCase()}::${(clinic.city || '').trim().toLowerCase()}`
+
+    if (!clinicMap.has(dedupKey)) {
+      clinicMap.set(dedupKey, clinic)
+    } else {
+      // If duplicate, prefer verified clinic
+      const existing = clinicMap.get(dedupKey)!
+      if (!existing.isVerified && clinic.isVerified) {
+        clinicMap.set(dedupKey, clinic)
+      }
+    }
+  }
+
+  return Array.from(clinicMap.values())
 }

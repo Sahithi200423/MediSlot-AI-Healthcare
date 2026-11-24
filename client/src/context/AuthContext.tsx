@@ -11,6 +11,7 @@ export interface UserProfile {
   role: UserRole
   firstName: string
   lastName: string
+  avatarUrl?: string | null
   clinicId?: string | null
 }
 
