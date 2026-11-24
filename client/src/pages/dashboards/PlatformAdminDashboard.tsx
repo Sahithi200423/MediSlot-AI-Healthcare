@@ -10,6 +10,7 @@ import { DashboardShell, type NavItem } from "@/components/layout/DashboardShell
 import { Skeleton } from "@/components/ui/Skeleton"
 import { useAuth } from "@/context/AuthContext"
 import { api, API_BASE, type Clinic, type Appointment } from "@/lib/api"
+import { processClinicDirectory } from "@/lib/doctorDirectory"
 import { modalBackdropVariants, modalDialogVariants } from "@/lib/motion"
 
 export function PlatformAdminDashboard() {
@@ -58,11 +59,11 @@ export function PlatformAdminDashboard() {
     { id: "settings", label: "System Gateway", icon: Settings },
   ]
 
-  // Load All Clinics
+  // Load All Clinics (filter out automated test artifacts)
   const loadClinicsData = async () => {
     try {
-      const list = await api.getClinics()
-      setClinics(list)
+      const list = await api.getClinics(true)
+      setClinics(processClinicDirectory(list))
     } catch (err: any) {
       console.error("Failed to load clinics:", err)
     }
@@ -199,7 +200,7 @@ export function PlatformAdminDashboard() {
       roleColor="purple"
       userDisplayName={adminName}
       userSubtitle="Enterprise Infrastructure & Governance"
-      userAvatar="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150"
+      userAvatar={user?.avatarUrl || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150"}
       navItems={navItems}
       activeTab={activeTab}
       onSelectTab={setActiveTab}

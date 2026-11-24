@@ -14,6 +14,7 @@ import {
   AlertCircle,
 } from "lucide-react"
 import { toast } from "sonner"
+import { useAuth } from "@/context/AuthContext"
 import { formatINR } from "@/lib/currency"
 import { EDITORIAL_EASE, modalBackdropVariants, modalDialogVariants } from "@/lib/motion"
 
@@ -43,8 +44,8 @@ const SAMPLE_DOCTORS: BookingPreviewDoctor[] = [
   {
     id: "doc-2",
     name: "Dr. Marcus Vance, DO",
-    specialty: "Neurology & Spine Care",
-    clinic: "Apex Brain & Spine Medical Center",
+    specialty: "Cardiology",
+    clinic: "MediSlot Central Metro Clinic",
     fee: 499,
     avatar: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=200",
     initials: "MV",
@@ -148,11 +149,12 @@ export function InteractiveBookingModal({
   const selectedDoctor: BookingPreviewDoctor =
     doctorOptions.find((d) => d.id === (manualDoctorId ?? initialDoctorId)) || doctorOptions[0]
 
+  const { user } = useAuth()
   const [selectedDate, setSelectedDate] = useState(() => dateOptions[1] || "Tomorrow")
   const [selectedTime, setSelectedTime] = useState("10:30 AM")
   const [consultType, setConsultType] = useState<"in-clinic" | "video">("in-clinic")
-  const [patientName, setPatientName] = useState("Alex Turner")
-  const [symptoms, setSymptoms] = useState("Follow-up consultation and lab review")
+  const [patientName, setPatientName] = useState(() => (user ? `${user.firstName} ${user.lastName}`.trim() : ""))
+  const [symptoms, setSymptoms] = useState("")
   const [validationError, setValidationError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
@@ -163,6 +165,10 @@ export function InteractiveBookingModal({
     setManualDoctorId(null)
     setValidationError(null)
     setIsCompleted(false)
+    if (!user) {
+      setPatientName("")
+    }
+    setSymptoms("")
     onClose()
   }
 
@@ -571,6 +577,7 @@ export function InteractiveBookingModal({
                         <input
                           id="preview-patient-name"
                           value={patientName}
+                          placeholder="e.g. Full patient name"
                           onChange={(e) => {
                             setPatientName(e.target.value)
                             if (validationError) setValidationError(null)
@@ -587,6 +594,7 @@ export function InteractiveBookingModal({
                           id="preview-chief-concern"
                           rows={2}
                           value={symptoms}
+                          placeholder="e.g. Routine follow-up, symptom review, or diagnostic evaluation..."
                           onChange={(e) => {
                             setSymptoms(e.target.value)
                             if (validationError) setValidationError(null)

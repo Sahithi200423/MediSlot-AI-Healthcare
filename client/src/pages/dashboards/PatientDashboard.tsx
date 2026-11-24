@@ -18,7 +18,7 @@ import {
   type MedicalRecord,
   type Prescription
 } from "@/lib/api"
-import { processDoctorDirectory } from "@/lib/doctorDirectory"
+import { processDoctorDirectory, processClinicDirectory, formatDoctorClinics } from "@/lib/doctorDirectory"
 import { toast } from "sonner"
 import { AiConsentBanner } from "@/components/ai/AiConsentBanner"
 
@@ -80,16 +80,32 @@ export function PatientDashboard() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSpecialty, setSelectedSpecialty] = useState("all")
 
-  // Client-side search filtering without name-based deduplication
+  // Dynamic specialty options derived directly from live loaded doctors
+  const specialtyOptions = useMemo(() => {
+    const set = new Set<string>()
+    doctors.forEach((d) => {
+      if (d.specialty?.trim()) set.add(d.specialty.trim())
+    })
+    return ["all", ...Array.from(set)]
+  }, [doctors])
+
+  // Client-side search filtering across doctor name, specialty, primary clinic, and all affiliated facilities
   const displayedDoctors = useMemo(() => {
     if (!searchQuery.trim()) return doctors
     const q = searchQuery.toLowerCase().trim()
     return doctors.filter((doc) => {
       const fullName = `${doc.profile?.firstName || ""} ${doc.profile?.lastName || ""}`.toLowerCase()
       const spec = (doc.specialty || "").toLowerCase()
-      const clinicName = (doc.clinic?.name || "").toLowerCase()
+      const clinicInfo = formatDoctorClinics(doc)
+      const matchesAffiliated = clinicInfo.allClinics.some((c) => c.toLowerCase().includes(q))
       const clinicCity = (doc.clinic?.city || "").toLowerCase()
-      return fullName.includes(q) || spec.includes(q) || clinicName.includes(q) || clinicCity.includes(q)
+      return (
+        fullName.includes(q) ||
+        spec.includes(q) ||
+        clinicInfo.clinicDisplay.toLowerCase().includes(q) ||
+        matchesAffiliated ||
+        clinicCity.includes(q)
+      )
     })
   }, [doctors, searchQuery])
 
@@ -175,7 +191,7 @@ export function PatientDashboard() {
         api.getClinics(),
       ])
       setDoctors(processDoctorDirectory(docs))
-      setClinics(cls)
+      setClinics(processClinicDirectory(cls))
     } catch (err: any) {
       console.error("Failed to load doctors:", err)
     } finally {
@@ -268,7 +284,7 @@ export function PatientDashboard() {
       roleColor="teal"
       userDisplayName={userDisplayName}
       userSubtitle={user?.email || "Authenticated Patient"}
-      userAvatar="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"
+      userAvatar={user?.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"}
       navItems={navItems}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
@@ -447,11 +463,11 @@ export function PatientDashboard() {
               onChange={(e) => setSelectedSpecialty(e.target.value)}
               className="rounded-full border border-[#e4ded5] bg-white px-4 py-2 text-xs text-[#1e1815] focus:outline-none focus:border-[#cb6440]"
             >
-              <option value="all">All Specialties</option>
-              <option value="Cardiology">Cardiology</option>
-              <option value="Dermatology">Dermatology</option>
-              <option value="Neurology">Neurology</option>
-              <option value="General Medicine">General Medicine</option>
+              {specialtyOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt === "all" ? "All Specialties" : opt}
+                </option>
+              ))}
             </select>
 
             <button 
@@ -527,7 +543,10 @@ export function PatientDashboard() {
                           Dr. {doc.profile.firstName} {doc.profile.lastName}
                         </h4>
                         <p className="text-xs font-medium text-[#cb6440]">{doc.specialty}</p>
-                        <p className="text-[11px] text-[#6e6059]">{doc.clinic?.name || "Independent Practitioner"}</p>
+                        <p className="text-[11px] text-[#6e6059] truncate" title={formatDoctorClinics(doc).allClinics.join(" · ")}>
+                          {formatDoctorClinics(doc).clinicDisplay}
+                          {doc.clinic?.city ? ` · ${doc.clinic.city}` : ""}
+                        </p>
                       </div>
                     </div>
                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${

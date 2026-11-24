@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react"
+import { useState, useEffect, useMemo, lazy, Suspense } from "react"
 import { 
   Calendar, Clock, Users, FileText, 
   Sparkles, Bot, Stethoscope, Save,
@@ -277,15 +277,42 @@ export function DoctorDashboard() {
     }
   }
 
+  // Dynamically extract unique assigned patients from doctor's actual appointments
+  const assignedPatients = useMemo(() => {
+    const patientMap = new Map<string, {
+      id: string
+      name: string
+      email: string
+      phone: string
+      lastVisit: string
+      condition: string
+    }>()
+    appointments.forEach((apt) => {
+      if (!apt.patient?.profile) return
+      const pid = apt.patient.id || apt.patientId
+      if (!patientMap.has(pid)) {
+        patientMap.set(pid, {
+          id: pid,
+          name: `${apt.patient.profile.firstName} ${apt.patient.profile.lastName}`.trim(),
+          email: apt.patient.profile.email,
+          phone: apt.patient.profile.phone || "On File",
+          lastVisit: apt.scheduledStart,
+          condition: apt.reasonForVisit || (apt.visitType === "VIDEO_VISIT" ? "Telehealth Consultation" : "In-Clinic Visit"),
+        })
+      }
+    })
+    return Array.from(patientMap.values())
+  }, [appointments])
+
   const displayName = doctor 
     ? `Dr. ${doctor.profile?.firstName} ${doctor.profile?.lastName}`
     : user 
     ? `Dr. ${user.firstName} ${user.lastName}` 
-    : "Dr. Sarah Jenkins, MD"
+    : "Doctor Workspace"
 
   const subtitle = doctor 
     ? `${doctor.specialty} • ${doctor.clinic?.name || "Independent Practice"}`
-    : "Cardiology • Metropolitan Pavilion"
+    : user?.email || "Clinical Specialist"
 
   return (
     <DashboardShell
@@ -293,7 +320,7 @@ export function DoctorDashboard() {
       roleColor="teal"
       userDisplayName={displayName}
       userSubtitle={subtitle}
-      userAvatar="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=150"
+      userAvatar={doctor?.profile?.avatarUrl || user?.avatarUrl || "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=150"}
       navItems={navItems}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
@@ -964,37 +991,50 @@ export function DoctorDashboard() {
             <p className="text-xs text-[#6e6059] mt-1">Active patients under primary or consultative care.</p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-[#e8e2d8] overflow-hidden shadow-2xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-[#f8f5ee] text-[#6e6059] font-semibold border-b border-[#ece6dd]">
-                  <tr>
-                    <th className="p-4">Patient Name</th>
-                    <th className="p-4">Age / Sex</th>
-                    <th className="p-4">Primary Condition</th>
-                    <th className="p-4">Last Visit</th>
-                    <th className="p-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#f2ede4]">
-                  <tr className="hover:bg-[#fbf9f5]">
-                    <td className="p-4 font-bold text-[#1e1815]">Alex Turner</td>
-                    <td className="p-4 text-[#8c7e77]">34 / M</td>
-                    <td className="p-4 text-[#4a3e39]">Hypertension Stage 1</td>
-                    <td className="p-4 text-[#8c7e77]">Sep 28, 2026</td>
-                    <td className="p-4"><button className="text-[#cb6440] hover:underline font-semibold cursor-pointer">Open Clinical Chart</button></td>
-                  </tr>
-                  <tr className="hover:bg-[#fbf9f5]">
-                    <td className="p-4 font-bold text-[#1e1815]">Maria Gonzales</td>
-                    <td className="p-4 text-[#8c7e77]">42 / F</td>
-                    <td className="p-4 text-[#4a3e39]">Benign Arrhythmia</td>
-                    <td className="p-4 text-[#8c7e77]">Aug 12, 2026</td>
-                    <td className="p-4"><button className="text-[#cb6440] hover:underline font-semibold cursor-pointer">Open Clinical Chart</button></td>
-                  </tr>
-                </tbody>
-              </table>
+          {assignedPatients.length === 0 ? (
+            <div className="p-10 text-center border-2 border-dashed border-[#e4ded5] bg-white rounded-3xl space-y-2">
+              <Users className="w-8 h-8 text-[#c5a880] mx-auto" />
+              <h3 className="font-editorial-serif text-xl text-[#1e1815]">No Assigned Patients Yet</h3>
+              <p className="text-xs text-[#6e6059]">Patients who reserve consultation slots with your clinic will appear here automatically.</p>
             </div>
-          </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-[#e8e2d8] overflow-hidden shadow-2xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-[#f8f5ee] text-[#6e6059] font-semibold border-b border-[#ece6dd]">
+                    <tr>
+                      <th className="p-4">Patient Name</th>
+                      <th className="p-4">Contact</th>
+                      <th className="p-4">Consultation Context</th>
+                      <th className="p-4">Last Visit</th>
+                      <th className="p-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f2ede4]">
+                    {assignedPatients.map((pat) => (
+                      <tr key={pat.id} className="hover:bg-[#fbf9f5] transition-colors">
+                        <td className="p-4 font-bold text-[#1e1815]">{pat.name}</td>
+                        <td className="p-4 text-[#8c7e77]">{pat.email}</td>
+                        <td className="p-4 text-[#4a3e39]">{pat.condition}</td>
+                        <td className="p-4 text-[#8c7e77]">
+                          {new Date(pat.lastVisit).toLocaleDateString()}
+                        </td>
+                        <td className="p-4">
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("notes")}
+                            className="text-[#cb6440] hover:underline font-semibold cursor-pointer"
+                          >
+                            Open Clinical Chart
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

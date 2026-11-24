@@ -11,6 +11,7 @@ import { DashboardShell, type NavItem } from "@/components/layout/DashboardShell
 import { Skeleton } from "@/components/ui/Skeleton"
 import { useAuth } from "@/context/AuthContext"
 import { api, type Clinic, type Appointment } from "@/lib/api"
+import { processDoctorDirectory, processClinicDirectory } from "@/lib/doctorDirectory"
 import { formatINR } from "@/lib/currency"
 import { EDITORIAL_EASE } from "@/lib/motion"
 
@@ -116,10 +117,11 @@ export function ClinicAdminDashboard() {
   const loadClinicData = async () => {
     try {
       setLoading(true)
-      const list = await api.getClinics()
+      const rawList = await api.getClinics()
+      const list = processClinicDirectory(rawList)
       setClinics(list)
       if (list.length > 0) {
-        const preferred = list.find(c => c.id === "bf27f9e6-5410-4dd7-8332-26493b0d1127") || list[0]
+        const preferred = list.find(c => c.isVerified) || list[0]
         const active = preferred
         setSelectedClinic(active)
         setSettingsForm({
@@ -136,11 +138,11 @@ export function ClinicAdminDashboard() {
         // Fetch Clinic Appointments
         await loadClinicAppointments(active.id)
 
-        // Fetch staff and roster
+        // Fetch staff and roster (deduplicate doctors by verified identity)
         const staffRes = await api.getClinicStaff(active.id)
         if (staffRes) {
           setStaffData({
-            doctors: staffRes.doctors || [],
+            doctors: processDoctorDirectory(staffRes.doctors || []),
             memberships: staffRes.memberships || [],
             invitations: staffRes.invitations || [],
           })
@@ -186,7 +188,7 @@ export function ClinicAdminDashboard() {
     const staffRes = await api.getClinicStaff(clinic.id)
     if (staffRes) {
       setStaffData({
-        doctors: staffRes.doctors || [],
+        doctors: processDoctorDirectory(staffRes.doctors || []),
         memberships: staffRes.memberships || [],
         invitations: staffRes.invitations || [],
       })
@@ -295,7 +297,7 @@ export function ClinicAdminDashboard() {
       roleColor="emerald"
       userDisplayName={adminName}
       userSubtitle={`Director of Clinical Operations • ${clinicTitle}`}
-      userAvatar="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150"
+      userAvatar={user?.avatarUrl || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150"}
       navItems={navItems}
       activeTab={activeTab}
       onSelectTab={setActiveTab}

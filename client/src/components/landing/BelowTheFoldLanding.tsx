@@ -30,14 +30,14 @@ export default function BelowTheFoldLanding({ onOpenBooking }: BelowTheFoldLandi
   const [openFaq, setOpenFaq] = useState<number | null>(0)
 
   const specialties = [
-    { name: "General Medicine", icon: Stethoscope, count: "128 Practitioners", desc: "Primary care, preventative wellness, and acute health management" },
-    { name: "Cardiology", icon: HeartPulse, count: "45 Cardiologists", desc: "Cardiac evaluations, rhythm telemetry, and vascular prevention" },
-    { name: "Neurology", icon: Brain, count: "32 Neurologists", desc: "Neuro-cognitive diagnostics, migraine care, and spinal health" },
-    { name: "Pediatrics", icon: Baby, count: "54 Pediatricians", desc: "Newborn screenings, developmental milestones, and adolescent care" },
-    { name: "Dermatology", icon: Sparkles, count: "39 Dermatologists", desc: "Clinical dermatology, skin barrier pathology, and biopsies" },
-    { name: "Orthopedics", icon: Bone, count: "41 Specialists", desc: "Joint reconstruction, sports medicine, and bone density analysis" },
-    { name: "Ophthalmology", icon: Eye, count: "29 Eye Surgeons", desc: "Corneal health, retinal assessments, and optical diagnostics" },
-    { name: "Psychiatry", icon: Activity, count: "36 Clinicians", desc: "Behavioral health, neuro-psychological assessments, and therapy" },
+    { name: "General Medicine", icon: Stethoscope, count: "Primary Care & Prevention", desc: "Primary care, preventative wellness, and acute health management" },
+    { name: "Cardiology", icon: HeartPulse, count: "Cardiac & Vascular Diagnostics", desc: "Cardiac evaluations, rhythm telemetry, and vascular prevention" },
+    { name: "Neurology", icon: Brain, count: "Cognitive & Spinal Health", desc: "Neuro-cognitive diagnostics, migraine care, and spinal health" },
+    { name: "Pediatrics", icon: Baby, count: "Developmental & Adolescent Care", desc: "Newborn screenings, developmental milestones, and adolescent care" },
+    { name: "Dermatology", icon: Sparkles, count: "Clinical & Barrier Pathology", desc: "Clinical dermatology, skin barrier pathology, and biopsies" },
+    { name: "Orthopedics", icon: Bone, count: "Joints & Sports Medicine", desc: "Joint reconstruction, sports medicine, and bone density analysis" },
+    { name: "Ophthalmology", icon: Eye, count: "Corneal & Optical Diagnostics", desc: "Corneal health, retinal assessments, and optical diagnostics" },
+    { name: "Psychiatry", icon: Activity, count: "Behavioral & Mental Health", desc: "Behavioral health, neuro-psychological assessments, and therapy" },
   ]
 
   const faqs = [

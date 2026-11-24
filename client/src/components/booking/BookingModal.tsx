@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { api, type Doctor, type Clinic, type AvailabilitySlot, type Appointment } from "@/lib/api"
+import { processDoctorDirectory, processClinicDirectory, formatDoctorClinics } from "@/lib/doctorDirectory"
 import { formatINR } from "@/lib/currency"
 import { EDITORIAL_EASE, modalBackdropVariants, modalDialogVariants } from "@/lib/motion"
 
@@ -132,8 +133,8 @@ export function BookingModal({
           needsClinics ? api.getClinics() : Promise.resolve(null),
         ])
         if (cancelled) return
-        if (docs) setDirectoryDoctors(docs)
-        if (cls) setFallbackClinics(cls)
+        if (docs) setDirectoryDoctors(processDoctorDirectory(docs))
+        if (cls) setFallbackClinics(processClinicDirectory(cls))
       } catch {
         // Keep existing state; user will see validation message if empty
       } finally {
@@ -346,6 +347,9 @@ export function BookingModal({
                                   <p className="text-xs text-[#cb6440] font-medium truncate">
                                     {doc.specialty}
                                   </p>
+                                  <p className="text-[11px] text-[#6e6059] truncate mt-0.5">
+                                    {formatDoctorClinics(doc).clinicDisplay}
+                                  </p>
                                 </div>
                                 <span className="font-bold text-xs text-[#1e1815] bg-[#f5f1e9] px-2.5 py-1 rounded-full shrink-0">
                                   {formatINR(doc.consultationFee)}
@@ -369,7 +373,7 @@ export function BookingModal({
                           </div>
                           <p className="text-xs text-[#6e6059] mt-1">
                             {selectedDoctor.qualifications || "Board Certified Specialist"} •{" "}
-                            {selectedDoctor.yearsOfExperience} yrs exp
+                            {selectedDoctor.yearsOfExperience} yrs exp • {formatDoctorClinics(selectedDoctor).clinicDisplay}
                           </p>
                           <p className="text-xs font-bold text-[#cb6440] mt-1.5">
                             Consultation Fee: {formatINR(selectedDoctor.consultationFee)}
