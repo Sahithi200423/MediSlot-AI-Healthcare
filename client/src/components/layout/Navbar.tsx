@@ -18,9 +18,10 @@ export function Navbar({
 
   useEffect(() => {
     let ticking = false
+    let rafId: number | null = null
     const handleScroll = () => {
       if (!ticking) {
-        requestAnimationFrame(() => {
+        rafId = requestAnimationFrame(() => {
           setIsScrolled(window.scrollY > 12)
           ticking = false
         })
@@ -29,7 +30,12 @@ export function Navbar({
     }
     handleScroll()
     window.addEventListener("scroll", handleScroll, { passive: true })
-    return () => window.removeEventListener("scroll", handleScroll)
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+      window.removeEventListener("scroll", handleScroll)
+    }
   }, [])
 
   useEffect(() => {

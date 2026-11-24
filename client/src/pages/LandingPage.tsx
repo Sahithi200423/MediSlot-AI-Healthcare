@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useDeferredValue, lazy, Suspense } from "react"
+import { useState, useEffect, useMemo, useDeferredValue, useCallback, lazy, Suspense } from "react"
 import { motion } from "framer-motion"
 import {
   Search,
@@ -222,17 +222,17 @@ export function LandingPage() {
 
   const visibleDoctors = showAllDoctors ? filteredDoctors : filteredDoctors.slice(0, 4)
 
-  const handleOpenBooking = (docId?: string) => {
+  const handleOpenBooking = useCallback((docId?: string) => {
     setSelectedDoctorId(docId)
     setHasOpenedBookingModal(true)
     setIsBookingModalOpen(true)
-  }
+  }, [])
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fbf9f5] dark:bg-[#141210] text-[#542f28] dark:text-[#f5f1e9] font-editorial-sans transition-colors selection:bg-[#ede4d5] selection:text-[#2a201e]">
       
       {/* Editorial Navigation with Topline Identity */}
-      <Navbar onOpenBooking={() => handleOpenBooking()} onPrefetchBooking={prefetchBookingModal} />
+      <Navbar onOpenBooking={handleOpenBooking} onPrefetchBooking={prefetchBookingModal} />
 
       {/* 5-Step Interactive Booking Engine Modal (Lazy-Loaded with Intent Prefetch & Fallback) */}
       {hasOpenedBookingModal && (
@@ -514,7 +514,7 @@ export function LandingPage() {
                     <DoctorDirectoryCard
                       key={doc.id}
                       doctor={doc}
-                      onSelect={(id) => handleOpenBooking(id)}
+                      onSelect={handleOpenBooking}
                       onPrefetchBooking={prefetchBookingModal}
                     />
                   ))}
