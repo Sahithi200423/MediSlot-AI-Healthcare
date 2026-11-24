@@ -11,6 +11,7 @@ export interface DiscoveryDoctor extends BookingPreviewDoctor {
   clinics: string[]
   clinicDisplay: string
   affiliatedCount: number
+  isDemo?: boolean
 }
 
 interface DoctorDirectoryCardProps {
@@ -24,12 +25,14 @@ export const DoctorDirectoryCard = memo(function DoctorDirectoryCard({
   onSelect,
   onPrefetchBooking,
 }: DoctorDirectoryCardProps) {
+  const isDemo = Boolean(doctor.isDemo)
+
   return (
     <button
       type="button"
       onClick={() => onSelect(doctor.id)}
-      onPointerEnter={onPrefetchBooking}
-      onFocus={onPrefetchBooking}
+      onPointerEnter={isDemo ? undefined : onPrefetchBooking}
+      onFocus={isDemo ? undefined : onPrefetchBooking}
       className="text-left bg-white rounded-2xl border border-[#e8e2d8] p-4 flex items-center gap-4 shadow-xs hover:shadow-md hover:border-[#cb6440]/55 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group"
     >
       {doctor.avatar ? (
@@ -52,14 +55,21 @@ export const DoctorDirectoryCard = memo(function DoctorDirectoryCard({
           <h3 className="text-sm font-bold text-[#1e1815] truncate group-hover:text-[#cb6440] transition-colors">
             {doctor.name}
           </h3>
-          {doctor.isVerified && (
+          {doctor.isVerified ? (
             <span
               title="Verified Clinician"
               className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#4a6356] bg-[#4a6356]/10 px-1.5 py-0.5 rounded-full shrink-0"
             >
               <ShieldCheck className="w-3 h-3" /> Verified
             </span>
-          )}
+          ) : isDemo ? (
+            <span
+              title="Simulated Department Profile"
+              className="inline-flex items-center text-[10px] font-semibold text-[#8c7e77] bg-[#ede5d9] border border-[#dcd3c6] px-1.5 py-0.5 rounded-full shrink-0"
+            >
+              Demo profile
+            </span>
+          ) : null}
         </div>
         <p className="text-xs text-[#cb6440] font-medium truncate mt-0.5">
           {doctor.specialty}
@@ -72,14 +82,21 @@ export const DoctorDirectoryCard = memo(function DoctorDirectoryCard({
           </span>
         </p>
         <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-[#f2ede4]">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#4a6b5d] truncate">
-            <span
-              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                doctor.isAccepting ? 'bg-[#4a6b5d]' : 'bg-[#c5a880]'
-              }`}
-            />
-            <span className="truncate">{doctor.nextAvailable}</span>
-          </span>
+          {isDemo ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#8c7e77] truncate">
+              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#c5a880]" />
+              <span className="truncate">Not bookable · Department showcase</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#4a6b5d] truncate">
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  doctor.isAccepting ? 'bg-[#4a6b5d]' : 'bg-[#c5a880]'
+                }`}
+              />
+              <span className="truncate">{doctor.nextAvailable}</span>
+            </span>
+          )}
           <span className="shrink-0 text-xs font-bold text-[#1e1815] bg-[#f5f1e9] px-2.5 py-0.5 rounded-full">
             {formatINR(doctor.fee)}
           </span>

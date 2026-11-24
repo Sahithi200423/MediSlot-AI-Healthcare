@@ -4,12 +4,14 @@ import {
   Search,
   RotateCcw,
 } from "lucide-react"
+import { toast } from "sonner"
 import { Navbar } from "@/components/layout/Navbar"
 import {
   DoctorDirectoryCard,
   type DiscoveryDoctor,
 } from "@/components/landing/DoctorDirectoryCard"
 import { processDoctorDirectory } from "@/lib/doctorDirectory"
+import { getComplementaryDemoProfiles } from "@/lib/demoSpecialists"
 
 // Lazy-load below-the-fold content to slash initial client DOM creation task
 const BelowTheFoldLanding = lazy(() => import("@/components/landing/BelowTheFoldLanding"))
@@ -195,7 +197,10 @@ export function LandingPage() {
     }
   }, [reloadNonce])
 
-  const directoryDoctors = liveDoctors
+  const directoryDoctors = useMemo(() => {
+    const complementaryDemos = getComplementaryDemoProfiles(liveDoctors, 4)
+    return [...liveDoctors, ...complementaryDemos]
+  }, [liveDoctors])
 
   const specialtyChips = useMemo(() => {
     const unique = Array.from(new Set(directoryDoctors.map((d) => d.specialty).filter(Boolean)))
@@ -228,6 +233,20 @@ export function LandingPage() {
     setIsBookingModalOpen(true)
   }, [])
 
+  const handleDoctorSelect = useCallback(
+    (doctorId: string) => {
+      const targetDoc = directoryDoctors.find((d) => d.id === doctorId)
+      if (targetDoc?.isDemo) {
+        toast.info("Department Showcase Profile", {
+          description: `${targetDoc.name} is an illustrative department profile. To book an appointment, please select a live specialist.`,
+        })
+        return
+      }
+      handleOpenBooking(doctorId)
+    },
+    [directoryDoctors, handleOpenBooking]
+  )
+
   return (
     <div className="min-h-screen flex flex-col bg-[#fbf9f5] dark:bg-[#141210] text-[#542f28] dark:text-[#f5f1e9] font-editorial-sans transition-colors selection:bg-[#ede4d5] selection:text-[#2a201e]">
       
@@ -241,7 +260,7 @@ export function LandingPage() {
             isOpen={isBookingModalOpen}
             onClose={() => setIsBookingModalOpen(false)}
             initialDoctorId={selectedDoctorId}
-            doctors={directoryDoctors}
+            doctors={directoryDoctors.filter((d) => !d.isDemo)}
           />
         </Suspense>
       )}
@@ -345,7 +364,7 @@ export function LandingPage() {
 
             <p className="col-span-2 text-[10px] text-[#8c7e77] leading-tight italic pt-1">
               {liveDoctors.length > 0
-                ? `* Showcase network metrics · ${liveDoctors.length} physicians loaded live from MediSlot directory`
+                ? `* Showcase network metrics · ${liveDoctors.length} physician${liveDoctors.length > 1 ? "s" : ""} loaded live from MediSlot directory`
                 : "* Showcase network metrics · Connected to live MediSlot physician directory"}
             </p>
           </div>
@@ -356,8 +375,12 @@ export function LandingPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault()
-                const match = filteredDoctors[0]
-                handleOpenBooking(match?.id)
+                const liveMatch = filteredDoctors.find((d) => !d.isDemo)
+                if (liveMatch) {
+                  handleOpenBooking(liveMatch.id)
+                } else {
+                  handleOpenBooking()
+                }
               }}
               className="w-full bg-white rounded-full border border-[#e4ded5] focus-within:border-[#cb6440] focus-within:ring-2 focus-within:ring-[#cb6440]/15 shadow-xs px-4 sm:px-5 py-2 flex items-center gap-3 transition-all"
             >
@@ -427,7 +450,20 @@ export function LandingPage() {
                   ? "Loading live directory..."
                   : directoryError
                   ? "Directory temporarily unreachable"
-                  : `${filteredDoctors.length} Live Specialists`}
+                  : (() => {
+                      const liveFilteredCount = filteredDoctors.filter((d) => !d.isDemo).length
+                      const demoFilteredCount = filteredDoctors.filter((d) => d.isDemo).length
+                      if (liveFilteredCount > 0 && demoFilteredCount > 0) {
+                        return `${liveFilteredCount} Live Specialist${liveFilteredCount > 1 ? "s" : ""} · ${demoFilteredCount} Department Showcase${demoFilteredCount > 1 ? "s" : ""}`
+                      }
+                      if (liveFilteredCount > 0) {
+                        return `${liveFilteredCount} Live Specialist${liveFilteredCount > 1 ? "s" : ""}`
+                      }
+                      if (demoFilteredCount > 0) {
+                        return `${demoFilteredCount} Department Showcase Profile${demoFilteredCount > 1 ? "s" : ""}`
+                      }
+                      return "0 Specialists available"
+                    })()}
               </span>
             </div>
 
@@ -514,8 +550,8 @@ export function LandingPage() {
                     <DoctorDirectoryCard
                       key={doc.id}
                       doctor={doc}
-                      onSelect={handleOpenBooking}
-                      onPrefetchBooking={prefetchBookingModal}
+                      onSelect={handleDoctorSelect}
+                      onPrefetchBooking={doc.isDemo ? undefined : prefetchBookingModal}
                     />
                   ))}
                 </div>
