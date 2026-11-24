@@ -28,23 +28,22 @@ export function isSyntheticDoctorAccount(doc: Doctor): boolean {
 }
 
 /**
- * Returns a stable unique identity key for a doctor.
- * Uses doctor.id as primary identity, with verified account email and
- * profile id as supporting relationships.
+ * Returns a stable unique identity key for a doctor record.
  *
- * CRITICAL SAFETY REQUIREMENT:
- * Does NOT collapse legitimate doctors who happen to share the same name and specialty
- * if their verified accounts/IDs are distinct.
+ * IDENTITY RULES:
+ * 1. Doctor.id is the sole primary identity key for valid persisted doctor records.
+ * 2. Different doctor IDs are NEVER merged using email, profile ID, license number,
+ *    name, or specialty.
+ * 3. If doc.id is missing or empty, do not fall back to email or profile ID.
+ *    Returns an empty string, excluding the invalid record from deduplication mapping.
+ * 4. Multi-clinic affiliations for the doctor are preserved through existing clinic
+ *    memberships and affiliatedClinics relationships.
  */
 export function getDoctorStableIdentity(doc: Doctor): string {
-  const email = (doc.profile?.email || '').trim().toLowerCase()
-  if (email) {
-    return `email:${email}`
-  }
-  if (doc.profile?.id) {
-    return `profile:${doc.profile.id}`
-  }
-  return `doc:${doc.id}`
+  if (!doc) return ''
+  const docId = (doc.id || '').trim()
+  if (!docId) return ''
+  return `doc:${docId}`
 }
 
 export type ClinicSummary = {
@@ -127,7 +126,7 @@ export function processDoctorDirectory(rawDoctors: Doctor[]): Doctor[] {
   const affiliationsMap = new Map<string, Map<string, ClinicSummary>>()
 
   for (const doc of rawDoctors) {
-    if (!doc || !doc.id) continue
+    if (!doc || !doc.id || !doc.id.trim()) continue
 
     // 1. Filter confirmed synthetic test suite accounts at presentation layer only
     if (isSyntheticDoctorAccount(doc)) {
@@ -136,6 +135,7 @@ export function processDoctorDirectory(rawDoctors: Doctor[]): Doctor[] {
 
     // 2. Resolve stable identity
     const identityKey = getDoctorStableIdentity(doc)
+    if (!identityKey) continue
 
     if (!doctorMap.has(identityKey)) {
       doctorMap.set(identityKey, doc)
